@@ -160,7 +160,7 @@
   {#if issue}
     <View style={{ direction: "row", align: "center", gap: 8, paddingX: 14, height: 44, shrink: 0 }}>
       <View style={{ paddingX: 8, height: 20, radius: 10, justify: "center", background: issue.state === "OPEN" ? "#3fb95033" : "#a371f733" }}>
-        <Text style={{ fontSize: 11, color: issue.state === "OPEN" ? c.ok : "#a371f7" }}>
+        <Text style={{ fontSize: 11, nowrap: true, color: issue.state === "OPEN" ? c.ok : "#a371f7" }}>
           {issue.state === "OPEN" ? "Open" : issue.stateReason === "NOT_PLANNED" ? "Not planned" : "Closed"}
         </Text>
       </View>

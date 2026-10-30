@@ -79,7 +79,7 @@
       >
         <View style={{ direction: "row", align: "center", gap: s(6), paddingX: s(4), height: s(26) }}>
           <View style={{ width: s(8), height: s(8), radius: s(4), background: tone(column.color) }} />
-          <Text style={{ fontSize: s(12), fontWeight: "semibold", truncate: true }}>{column.name}</Text>
+          <Text style={{ fontSize: s(12), fontWeight: "semibold", nowrap: true }}>{column.name}</Text>
           <Text style={{ fontSize: s(11), color: c.faint }}>{column.cards.length}</Text>
           {#if placed[column.key]}
             <Text style={{ fontSize: s(10), color: c.faint }}>+{placed[column.key]} on canvas</Text>

@@ -58,6 +58,8 @@
     onselect?: (id: string | null) => void;
     /** A double press on a node. */
     onopen?: (id: string) => void;
+    /** A node pressed and released without moving it. */
+    onpress?: (id: string) => void;
     onselectarrow?: (id: string | null) => void;
     onmoved?: (id: string, x: number, y: number) => void;
     onconnect?: (from: string, to: string) => void;
@@ -82,6 +84,7 @@
     linkable = false,
     onselect,
     onopen,
+    onpress,
     onselectarrow,
     onmoved,
     onconnect,
@@ -217,6 +220,7 @@
 
   function nodeUp() {
     if (drag?.moved) onmoved?.(drag.id, drag.x, drag.y);
+    else if (drag) onpress?.(drag.id);
     drag = null;
   }
 
@@ -307,21 +311,25 @@
       <View
         style={{
           position: "absolute",
-          left: p.x + n.w * zoom - 7,
-          top: p.y + (n.h * zoom) / 2 - 7,
-          width: 14,
-          height: 14,
-          radius: 7,
+          left: p.x + n.w * zoom - 8,
+          top: p.y + (n.h * zoom) / 2 - 8,
+          width: 16,
+          height: 16,
+          radius: 8,
           background: c.accent,
           borderWidth: 2,
           borderColor: c.bg,
           cursor: "crosshair",
+          align: "center",
+          justify: "center",
         }}
         hover={{ background: "#9aa6ff" }}
         ondown={(e) => linkDown(n, e)}
         onmove={linkMove}
         onup={linkUp}
-      />
+      >
+        <Text style={{ fontSize: 9, color: "#fff", lineHeight: 10 }}>→</Text>
+      </View>
     {/if}
   {/each}
 </View>

@@ -62,11 +62,16 @@
     return counts;
   });
 
+  /** Writes the canvas. A node the host hasn't described yet (just added) needs a reload. */
   function save(next: CanvasNode[]) {
     if (!data) return;
     data = { ...data, nodes: next };
     const path = data.path;
-    void app.run(() => app.api.saveCanvas(path, next));
+    const fresh = next.some((n) => !n.item);
+    void app.run(async () => {
+      await app.api.saveCanvas(path, next);
+      if (fresh || next.length !== nodes.length) app.version++;
+    });
   }
 
   function add(node: CanvasNode, at: Point) {
@@ -95,19 +100,19 @@
     save(data.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)));
   }
 
+  /** A press selects (and shows the handle for drawing an arrow); a double press opens. */
   function select(id: string | null) {
     selected = id;
-    const item = data?.nodes.find((n) => n.id === id)?.item;
-    if (item?.kind === "issue") app.select({ kind: "issue", node: item.card.node });
-    else if (item?.kind === "note") app.select({ kind: "note", path: item.path });
   }
 
   function open(id: string) {
+    selected = id;
     const item = data?.nodes.find((n) => n.id === id)?.item;
     if (!item) return;
-    if (item.kind === "image" || item.kind === "file") void app.run(() => app.api.open(item.path));
+    if (item.kind === "issue") app.select({ kind: "issue", node: item.card.node });
+    else if (item.kind === "note") app.select({ kind: "note", path: item.path });
+    else if (item.kind === "image" || item.kind === "file") void app.run(() => app.api.open(item.path));
     else if (item.kind === "link") void app.run(() => app.api.open(item.uri));
-    else select(id);
   }
 
   async function newNote(at: Point) {

@@ -171,9 +171,15 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
         Some((owner, name)) => cache.repo_id(owner, name)?,
         None => None,
     };
+    let mut board = match &repo_id {
+        Some(id) => views::board(cache.conn(), id)?,
+        None => json!({"statusField": null, "columns": []}),
+    };
     if let Some(repo) = &repo
         && !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board"))
     {
+        // As wide as its columns need (Open and Closed until the first sync tells), never narrower.
+        let columns = board["columns"].as_array().map_or(2, Vec::len).max(2) as f64;
         let mut extra = Map::new();
         extra.insert("neoworks".into(), json!({"kind": "board"}));
         canvas.nodes.insert(
@@ -183,8 +189,8 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
                 kind: "link".into(),
                 x: 0.0,
                 y: 0.0,
-                width: 1180.0,
-                height: 760.0,
+                width: 24.0 + columns * 290.0,
+                height: 640.0,
                 color: None,
                 text: None,
                 file: None,
@@ -208,10 +214,6 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
         v["item"] = it;
         nodes.push(v);
     }
-    let mut board = match &repo_id {
-        Some(id) => views::board(cache.conn(), id)?,
-        None => json!({"statusField": null, "columns": []}),
-    };
     if let Some(columns) = board["columns"].as_array_mut() {
         for column in columns {
             if let Some(cards) = column["cards"].as_array_mut() {

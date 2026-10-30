@@ -76,6 +76,7 @@
       {selected}
       onselect={(id) => (selected = id)}
       onopen={open}
+      onpress={open}
       onmoved={moved}
     >
       {#snippet node(n, zoom)}
