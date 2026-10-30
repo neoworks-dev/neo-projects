@@ -152,3 +152,20 @@ export const primaryHover: Style = { background: c.fillHover, borderColor: c.fil
 
 /** A small uppercase heading over a group, as the site's section labels. */
 export const eyebrow: Style = { fontSize: 11, fontWeight: "medium", color: c.faint, uppercase: true };
+
+/** Code, by the kind of each run the host's highlighter names. */
+export const codeColors: Record<string, string> = {
+  keyword: t.scales.rock[11],
+  string: t.colors.success,
+  comment: t.colors.faint,
+  number: t.scales.larch[11],
+  constant: t.scales.larch[11],
+  function: t.scales.lake[11],
+  type: t.scales.larch[10],
+  tag: t.scales.rock[11],
+  attribute: t.scales.lake[11],
+  variable: t.colors.text,
+  operator: t.colors.muted,
+  punctuation: t.colors.muted,
+  plain: t.colors.text,
+};

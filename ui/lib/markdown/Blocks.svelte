@@ -21,6 +21,7 @@
   import type { Token, Tokens } from "marked";
   import { c, radii } from "../theme.ts";
   import Blocks from "./Blocks.svelte";
+  import Code from "./Code.svelte";
   import Inline from "./Inline.svelte";
   import { links, onlyImages, resolveSrc } from "./parse.ts";
 
@@ -108,7 +109,9 @@
         <Text style={{ fontSize: 11, color: c.faint, paddingX: 12, paddingTop: 8 }}>{code.lang}</Text>
       {/if}
       <Scroll horizontal style={{ maxWidth: "full" }}>
-        <Text pre style={{ fontFamily: "mono", fontSize: ctx.size * 0.85, lineHeight: ctx.size * 1.4, color: c.text, padding: [code.lang ? 4 : 10, 12, 10, 12] }}>{code.text}</Text>
+        <View style={{ padding: [code.lang ? 4 : 10, 12, 10, 12] }}>
+          <Code code={code.text} lang={code.lang ?? ""} size={ctx.size} />
+        </View>
       </Scroll>
     </View>
   {:else if token.type === "table"}

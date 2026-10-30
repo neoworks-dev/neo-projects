@@ -235,6 +235,7 @@ export const api = {
   linkFiles: (paths: string[]) => invoke<CanvasNode[]>("files_link", { paths }),
   linkUrl: (url: string) => invoke<CanvasNode>("url_link", { url }),
   open: (target: string) => invoke<null>("open_external", { target }),
+  highlight: (code: string, lang: string) => invoke<{ text: string; kind: string }[]>("highlight", { code, lang }),
   syncNow: () => invoke<null>("sync_now"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
 };

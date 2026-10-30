@@ -254,6 +254,9 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         app.emitter.emit("changed", json!({"reason": "board"}));
         Ok(Value::Null)
     });
+    command!("highlight", |_app: &App, args: Value| {
+        Ok(json!(np_core::highlight::highlight(arg(&args, "code")?, args["lang"].as_str().unwrap_or(""))))
+    });
     command!("open_external", |app: &App, args: Value| {
         let target = arg(&args, "target")?;
         let target = match app.get() {

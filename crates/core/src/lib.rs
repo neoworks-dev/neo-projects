@@ -13,6 +13,7 @@ pub mod edit;
 pub mod error;
 pub mod fields;
 pub mod github;
+pub mod highlight;
 pub mod views;
 pub mod workspace;
 
