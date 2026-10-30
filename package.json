@@ -1,0 +1,15 @@
+{
+  "name": "neoworks-projects",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.mjs",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.7",
+    "typescript": "^5.7.2"
+  }
+}

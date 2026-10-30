@@ -22,7 +22,7 @@ use serde_json::{Map, Value};
 
 pub use board::{Board, BoardColumn, Column, Filter, board_notes, read_board, write_board};
 pub use canvas::{Canvas, Edge, Node, read_canvas, write_canvas};
-pub use index::{SearchHit, apply, index_all, index_path, rename_path, search};
+pub use index::{SearchHit, apply, index_all, index_path, mime_for, rename_path, search};
 pub use note::{Note, create_note, ensure_id, read_note, set_prop, write_body};
 pub use project::{Project, ProjectError};
 pub use relations::Relation;

@@ -18,6 +18,9 @@ impl Cache {
     pub fn open(path: &Path) -> Result<Cache> {
         let conn = Connection::open(path)?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        // The window, the sync thread and the file watcher each hold a connection; writes wait
+        // for each other instead of failing.
+        conn.busy_timeout(std::time::Duration::from_secs(10))?;
         Cache::init(conn)
     }
 
@@ -137,7 +140,7 @@ pub(crate) fn now() -> String {
 }
 
 /// RFC 3339 in UTC without a date library: seconds since the epoch, converted by hand.
-pub(crate) fn iso(secs: i64) -> String {
+pub fn iso(secs: i64) -> String {
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     let z = days + 719_468;
     let era = z.div_euclid(146_097);

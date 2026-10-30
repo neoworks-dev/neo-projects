@@ -1,7 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/core"]
+members = ["crates/core", "crates/app"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
+
+# svelte-gpui is checked out next to this repo. Its host needs these patches too: xattr for a
+# libc incompatibility, gpui for its text cache fix.
+[patch.crates-io]
+xattr = { path = "../svelte-gpui/host/vendor/xattr" }
+gpui = { path = "../svelte-gpui/host/vendor/gpui" }

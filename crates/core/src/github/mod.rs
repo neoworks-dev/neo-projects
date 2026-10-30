@@ -77,6 +77,10 @@ impl<T: Transport> Client<T> {
         Client { transport }
     }
 
+    pub fn into_transport(self) -> T {
+        self.transport
+    }
+
     /// Runs a query or mutation and returns its `data`; GraphQL errors become [`Error::GraphQl`].
     pub fn run(&self, query: &str, variables: Value) -> Result<Value> {
         let answer = self.transport.post(&json!({"query": query, "variables": variables}))?;

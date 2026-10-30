@@ -1,0 +1,409 @@
+//! The canvases the window shows: the overview of every project, and a project's own canvas with
+//! its board. Each node comes with what it stands for (an issue's card, a note's title, an
+//! image's path), and the arrows are the relationships between nodes on the canvas, from GitHub
+//! and from `relations.jsonl`.
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+use np_core::views;
+use np_core::workspace::{self, Canvas, Node, Project, Uri, Workspace, read_canvas, read_note, write_canvas};
+use np_core::{Cache, Error, Result};
+use rusqlite::OptionalExtension;
+use serde_json::{Map, Value, json};
+
+/// The overview's canvas: a file in the workspace, so Obsidian shows it too.
+pub const OVERVIEW: &str = "Projects.canvas";
+
+const PROJECT_W: f64 = 320.0;
+const PROJECT_H: f64 = 230.0;
+
+pub fn rel(ws: &Workspace, path: &Path) -> String {
+    path.strip_prefix(ws.root()).unwrap_or(path).to_string_lossy().replace('\\', "/")
+}
+
+fn new_id() -> String {
+    uuid::Uuid::now_v7().simple().to_string()[16..].to_string()
+}
+
+pub fn project_json(ws: &Workspace, cache: &Cache, p: &Project) -> Result<Value> {
+    let repo = p.repos.first().cloned();
+    let summary = match repo.as_deref().and_then(|r| r.split_once('/')) {
+        Some((owner, name)) => match cache.repo_id(owner, name)? {
+            Some(id) => Some(views::repo_summary(cache.conn(), &id)?),
+            None => None,
+        },
+        None => None,
+    };
+    let repo_id = match repo.as_deref().and_then(|r| r.split_once('/')) {
+        Some((owner, name)) => cache.repo_id(owner, name)?,
+        None => None,
+    };
+    Ok(json!({
+        "id": p.id,
+        "name": p.name,
+        "folder": rel(ws, &p.folder),
+        "note": rel(ws, &p.note),
+        "repo": repo,
+        "repoId": repo_id,
+        "summary": summary,
+    }))
+}
+
+fn load(path: &Path) -> Result<Canvas> {
+    if path.exists() { read_canvas(path) } else { Ok(Canvas::default()) }
+}
+
+fn neoworks_kind(node: &Node) -> Option<&str> {
+    node.neoworks().and_then(|n| n.get("kind")).and_then(Value::as_str)
+}
+
+/// The overview: every project as a node of `Projects.canvas` (added where there is room when
+/// new), the blocks between their repositories as arrows.
+pub fn overview(ws: &Workspace, cache: &Cache) -> Result<(PathBuf, Value)> {
+    let path = ws.root().join(OVERVIEW);
+    let mut canvas = load(&path)?;
+    let (projects, errors) = ws.projects();
+    let mut by_note: HashMap<String, &Project> = projects.iter().map(|p| (rel(ws, &p.note), p)).collect();
+    let mut changed = false;
+    for node in &canvas.nodes {
+        if let Some(file) = &node.file {
+            by_note.remove(file);
+        }
+    }
+    let mut missing: Vec<&Project> = by_note.into_values().collect();
+    missing.sort_by(|a, b| a.name.cmp(&b.name));
+    for p in missing {
+        let (x, y) = free_spot(&canvas, PROJECT_W, PROJECT_H);
+        canvas.nodes.push(Node {
+            id: new_id(),
+            kind: "file".into(),
+            x,
+            y,
+            width: PROJECT_W,
+            height: PROJECT_H,
+            color: None,
+            text: None,
+            file: Some(rel(ws, &p.note)),
+            url: None,
+            label: None,
+            extra: Map::new(),
+        });
+        changed = true;
+    }
+    if changed {
+        write_canvas(&path, &canvas)?;
+    }
+    let notes: HashMap<String, &Project> = projects.iter().map(|p| (rel(ws, &p.note), p)).collect();
+    let mut repo_node: HashMap<String, String> = HashMap::new();
+    let mut nodes = Vec::new();
+    for node in &canvas.nodes {
+        let mut v = serde_json::to_value(node)?;
+        if let Some(p) = node.file.as_ref().and_then(|f| notes.get(f)) {
+            let project = project_json(ws, cache, p)?;
+            if let Some(id) = project["repoId"].as_str() {
+                repo_node.insert(id.to_string(), node.id.clone());
+            }
+            v["item"] = json!({"kind": "project", "uri": format!("file:workspace/{}", rel(ws, &p.note)), "project": project});
+        } else {
+            v["item"] = item(ws, cache, node)?;
+        }
+        nodes.push(v);
+    }
+    let mut arrows = Vec::new();
+    for block in views::cross_repo_blocks(cache.conn())? {
+        let (Some(from), Some(to)) = (
+            block["from"].as_str().and_then(|r| repo_node.get(r)),
+            block["to"].as_str().and_then(|r| repo_node.get(r)),
+        ) else {
+            continue;
+        };
+        arrows.push(json!({"id": format!("x:{from}:{to}"), "type": "blocks", "from": from, "to": to,
+                           "source": "derived", "count": block["count"]}));
+    }
+    let projects: Vec<Value> = projects.iter().map(|p| project_json(ws, cache, p)).collect::<Result<_>>()?;
+    let errors: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+    Ok((
+        path.clone(),
+        json!({"path": rel(ws, &path), "nodes": nodes, "arrows": arrows, "projects": projects, "errors": errors}),
+    ))
+}
+
+fn free_spot(canvas: &Canvas, w: f64, h: f64) -> (f64, f64) {
+    let gap = 40.0;
+    for row in 0..200 {
+        for col in 0..4 {
+            let (x, y) = (col as f64 * (w + gap), row as f64 * (h + gap));
+            let hit = canvas.nodes.iter().any(|n| {
+                x < n.x + n.width + gap / 2.0
+                    && n.x < x + w + gap / 2.0
+                    && y < n.y + n.height + gap / 2.0
+                    && n.y < y + h + gap / 2.0
+            });
+            if !hit {
+                return (x, y);
+            }
+        }
+    }
+    (0.0, 0.0)
+}
+
+pub fn find_project(ws: &Workspace, folder: &str) -> Result<Project> {
+    let (projects, _) = ws.projects();
+    projects
+        .into_iter()
+        .find(|p| rel(ws, &p.folder) == folder)
+        .ok_or_else(|| Error::Other(format!("no project in {folder}")))
+}
+
+pub fn project_canvas_path(p: &Project) -> PathBuf {
+    p.folder.join(format!("{}.canvas", p.name))
+}
+
+/// A project's canvas with its board, the board's issues minus those placed on the canvas, and
+/// the arrows between what is placed.
+pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value> {
+    let project = find_project(ws, folder)?;
+    let path = project_canvas_path(&project);
+    let mut canvas = load(&path)?;
+    let repo = project.repos.first().cloned();
+    let repo_id = match repo.as_deref().and_then(|r| r.split_once('/')) {
+        Some((owner, name)) => cache.repo_id(owner, name)?,
+        None => None,
+    };
+    if let Some(repo) = &repo
+        && !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board"))
+    {
+        let mut extra = Map::new();
+        extra.insert("neoworks".into(), json!({"kind": "board"}));
+        canvas.nodes.insert(
+            0,
+            Node {
+                id: new_id(),
+                kind: "link".into(),
+                x: 0.0,
+                y: 0.0,
+                width: 1180.0,
+                height: 760.0,
+                color: None,
+                text: None,
+                file: None,
+                url: Some(format!("https://github.com/{repo}")),
+                label: None,
+                extra,
+            },
+        );
+        write_canvas(&path, &canvas)?;
+    }
+    let mut nodes = Vec::new();
+    let mut placed_issues = HashSet::new();
+    for node in &canvas.nodes {
+        let mut v = serde_json::to_value(node)?;
+        let it = item(ws, cache, node)?;
+        if it["kind"] == "issue"
+            && let Some(id) = it["card"]["node"].as_str()
+        {
+            placed_issues.insert(id.to_string());
+        }
+        v["item"] = it;
+        nodes.push(v);
+    }
+    let mut board = match &repo_id {
+        Some(id) => views::board(cache.conn(), id)?,
+        None => json!({"statusField": null, "columns": []}),
+    };
+    if let Some(columns) = board["columns"].as_array_mut() {
+        for column in columns {
+            if let Some(cards) = column["cards"].as_array_mut() {
+                cards.retain(|c| !c["node"].as_str().is_some_and(|n| placed_issues.contains(n)));
+            }
+        }
+    }
+    let arrows = arrows(ws, cache, &canvas)?;
+    let mut project = project_json(ws, cache, &project)?;
+    project["repoId"] = json!(repo_id);
+    Ok(json!({"path": rel(ws, &path), "project": project, "board": board, "nodes": nodes, "arrows": arrows}))
+}
+
+/// The GitHub issue a URL names, by the mirror: its node id.
+pub fn issue_by_url(cache: &Cache, url: &str) -> Result<Option<String>> {
+    Ok(cache
+        .conn()
+        .query_row("SELECT node_id FROM gh_issues WHERE url = ?1", [url], |r| r.get(0))
+        .optional()?)
+}
+
+/// What a node stands for, for the window to draw.
+pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
+    if neoworks_kind(node) == Some("board") {
+        return Ok(json!({"kind": "board", "uri": node.url}));
+    }
+    let uri = ws.node_uri(node);
+    match node.kind.as_str() {
+        "text" => Ok(json!({"kind": "text", "uri": null, "text": node.text})),
+        "group" => Ok(json!({"kind": "group", "uri": null, "title": node.label})),
+        "link" => {
+            let url = node.url.clone().unwrap_or_default();
+            if let Some(Uri::File { .. }) = &uri {
+                let path = uri.as_ref().and_then(|u| ws.resolve_file(u));
+                return Ok(file_item(ws, uri.as_ref().map(ToString::to_string), path));
+            }
+            if url.starts_with("https://github.com/")
+                && let Some(id) = issue_by_url(cache, &url)?
+                && let Some(card) = views::card(cache.conn(), &id)?
+            {
+                return Ok(json!({"kind": "issue", "uri": url, "card": card}));
+            }
+            let host = url.split("//").nth(1).and_then(|r| r.split('/').next()).unwrap_or(&url).to_string();
+            let title = node.extra.get("title").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| {
+                url.split("//").nth(1).unwrap_or(&url).trim_end_matches('/').to_string()
+            });
+            Ok(json!({"kind": "link", "uri": url, "title": title, "host": host}))
+        }
+        "file" => {
+            let rel_path = node.file.clone().unwrap_or_default();
+            let path = ws.root().join(&rel_path);
+            if rel_path.ends_with(".board") {
+                return local_board(ws, &path);
+            }
+            Ok(file_item(ws, uri.map(|u| u.to_string()), Some(path)))
+        }
+        _ => Ok(json!({"kind": "missing", "uri": uri.map(|u| u.to_string()), "title": node.kind})),
+    }
+}
+
+fn file_item(ws: &Workspace, uri: Option<String>, path: Option<PathBuf>) -> Value {
+    let Some(path) = path.filter(|p| p.exists()) else {
+        return json!({"kind": "missing", "uri": uri, "title": "File not found"});
+    };
+    let title = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let mime = workspace::mime_for(&path);
+    if path.extension().is_some_and(|e| e == "md") {
+        let note = read_note(&path);
+        let (title, body) = note.map(|n| (n.title, n.body)).unwrap_or((title, String::new()));
+        let excerpt: String = body.trim().chars().take(400).collect();
+        return json!({"kind": "note", "uri": uri, "path": rel(ws, &path), "abs": path, "title": title, "excerpt": excerpt});
+    }
+    if mime.starts_with("image/") {
+        return json!({"kind": "image", "uri": uri, "path": path, "title": title});
+    }
+    let name = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    json!({"kind": "file", "uri": uri, "path": path, "title": name, "mime": mime})
+}
+
+fn local_board(ws: &Workspace, path: &Path) -> Result<Value> {
+    let board = workspace::read_board(path)?;
+    let notes: Vec<_> = ws.notes().into_iter().filter(|n| board.matches(n, ws.root())).collect();
+    let columns: Vec<Value> = workspace::board_notes(&board, &notes)
+        .into_iter()
+        .map(|col| {
+            json!({
+                "value": col.value,
+                "label": col.label,
+                "notes": col.notes.iter().map(|n| json!({
+                    "path": rel(ws, &n.path),
+                    "title": n.title,
+                    "excerpt": n.body.trim().chars().take(140).collect::<String>(),
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    Ok(json!({"kind": "localboard", "uri": format!("file:workspace/{}", rel(ws, path)), "path": rel(ws, path),
+              "title": board.title.clone().unwrap_or_else(|| path.file_stem().unwrap_or_default().to_string_lossy().to_string()),
+              "groupBy": board.group_by, "columns": columns}))
+}
+
+/// Each node's identity for relationships: a note's id, a file's URI, an issue's GitHub URL.
+fn identities(ws: &Workspace, canvas: &Canvas) -> BTreeMap<String, String> {
+    canvas.nodes.iter().filter_map(|n| ws.node_uri(n).map(|u| (u.to_string(), n.id.clone()))).collect()
+}
+
+/// The relationships between nodes of the canvas: GitHub's blocks and sub-issues between issues
+/// on it, and `relations.jsonl`'s between anything on it.
+pub fn arrows(ws: &Workspace, cache: &Cache, canvas: &Canvas) -> Result<Vec<Value>> {
+    let ids = identities(ws, canvas);
+    let mut out = Vec::new();
+    let mut by_issue: HashMap<String, String> = HashMap::new();
+    for (uri, node) in &ids {
+        if uri.starts_with("https://github.com/")
+            && let Some(issue) = issue_by_url(cache, uri)?
+        {
+            by_issue.insert(issue, node.clone());
+        }
+    }
+    let mut stmt = cache.conn().prepare("SELECT kind, from_node, to_node FROM gh_links")?;
+    let links: Vec<(String, String, String)> =
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
+    for (kind, from, to) in links {
+        if let (Some(a), Some(b)) = (by_issue.get(&from), by_issue.get(&to)) {
+            let label = if kind == "blocks" { "blocks" } else { "parent of" };
+            out.push(json!({"id": format!("gh:{kind}:{from}:{to}"), "type": if kind == "blocks" { "blocks" } else { "parent-of" },
+                            "from": a, "to": b, "label": label, "source": "github",
+                            "issues": [from, to]}));
+        }
+    }
+    for r in ws.relations()? {
+        if let (Some(a), Some(b)) = (ids.get(&r.from), ids.get(&r.to)) {
+            let label = r.label.clone().or_else(|| (r.kind != "relates").then(|| r.kind.replace('-', " ")));
+            out.push(json!({"id": r.id, "type": r.kind, "from": a, "to": b, "label": label, "source": "file"}));
+        }
+    }
+    Ok(out)
+}
+
+/// Writes a canvas from the window's nodes (without what the host added to them), and its edges
+/// from the relationships, so other JSON Canvas readers see the arrows too.
+pub fn save(ws: &Workspace, cache: &Cache, path: &Path, nodes: &[Value]) -> Result<()> {
+    let mut canvas = load(path)?;
+    canvas.nodes = nodes
+        .iter()
+        .map(|n| {
+            let mut n = n.clone();
+            if let Some(obj) = n.as_object_mut() {
+                obj.remove("item");
+            }
+            serde_json::from_value(n).map_err(Error::from)
+        })
+        .collect::<Result<_>>()?;
+    let arrows = arrows(ws, cache, &canvas)?;
+    canvas.edges = arrows
+        .iter()
+        .map(|a| {
+            let mut extra = Map::new();
+            extra.insert("neoworks".into(), json!({"relation": a["id"]}));
+            workspace::Edge {
+                id: a["id"].as_str().unwrap_or_default().chars().rev().take(16).collect(),
+                from_node: a["from"].as_str().unwrap_or_default().to_string(),
+                from_side: None,
+                from_end: None,
+                to_node: a["to"].as_str().unwrap_or_default().to_string(),
+                to_side: None,
+                to_end: Some("arrow".into()),
+                color: None,
+                label: a["label"].as_str().map(str::to_string),
+                extra,
+            }
+        })
+        .collect();
+    write_canvas(path, &canvas)
+}
+
+/// Every canvas in the workspace that names `old` (a workspace-relative path) now names `new`.
+pub fn rename_in_canvases(ws: &Workspace, old: &str, new: &str) -> Result<Vec<PathBuf>> {
+    let mut touched = Vec::new();
+    for path in ws.files().into_iter().filter(|p| p.extension().is_some_and(|e| e == "canvas")) {
+        let Ok(mut canvas) = read_canvas(&path) else { continue };
+        let mut changed = false;
+        for node in &mut canvas.nodes {
+            if node.file.as_deref() == Some(old) {
+                node.file = Some(new.to_string());
+                changed = true;
+            }
+        }
+        if changed {
+            write_canvas(&path, &canvas)?;
+            touched.push(path);
+        }
+    }
+    Ok(touched)
+}
