@@ -34,6 +34,7 @@
       }}
     >
       <Slot name="shell.main" />
+      <Slot name="shell.main.over" />
     </View>
     <Slot name="shell.panel" />
   </View>

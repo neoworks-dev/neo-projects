@@ -238,7 +238,13 @@
 
   $effect(() => {
     projectKeys.remove = removeSelected;
-    return () => (projectKeys.remove = null);
+    projectKeys.note = () => void newNote(centre());
+    projectKeys.link = () => (linkOpen = true);
+    return () => {
+      projectKeys.remove = null;
+      projectKeys.note = null;
+      projectKeys.link = null;
+    };
   });
 </script>
 

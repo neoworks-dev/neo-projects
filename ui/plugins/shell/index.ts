@@ -19,6 +19,7 @@ export const shell = {
         "shell.status": "list",
         "shell.status.right": "list",
         "shell.main": { kind: "chain", fallback: Empty },
+        "shell.main.over": "list",
         "shell.panel": "chain",
         "shell.overlay": "list",
       },

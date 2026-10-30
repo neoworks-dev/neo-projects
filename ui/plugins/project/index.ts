@@ -14,6 +14,15 @@ export const project = {
     const remove = () => (app.state.route.view === "project" && projectKeys.remove?.()) || false;
     keymap.bind("delete", remove);
     keymap.bind("backspace", remove);
+    // Letters reach the keymap only when no field has focus, so these never eat typing.
+    keymap.bind("n", () => {
+      if (app.state.route.view !== "project" || !projectKeys.note || app.state.selection?.kind === "note") return false;
+      projectKeys.note();
+    });
+    keymap.bind("l", () => {
+      if (app.state.route.view !== "project" || !projectKeys.link || app.state.selection?.kind === "note") return false;
+      projectKeys.link();
+    });
     keymap.bind("escape", () => {
       if (app.state.selection) {
         app.state.select(null);
