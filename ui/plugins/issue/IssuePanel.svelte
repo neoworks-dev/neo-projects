@@ -23,6 +23,7 @@
   import notPlanned from "@phosphor-icons/core/regular/x-circle.svg";
   import type { Card, IssueDetail, Linked } from "../../lib/api.ts";
   import Avatar from "../../lib/Avatar.svelte";
+  import Markdown from "../../lib/markdown/Markdown.svelte";
   import Picker from "../../lib/Picker.svelte";
   import { app } from "../../lib/state.svelte.ts";
   import { button, buttonHover, c, eyebrow, labelColor, radii, shadow, tone, tones } from "../../lib/theme.ts";
@@ -37,6 +38,13 @@
   let found = $state<Card[]>([]);
   let linking = $state<"blockedBy" | "blocking" | "parent" | null>(null);
   let searchField = $state<Input>();
+  /** Editing the description's Markdown; otherwise it shows rendered. */
+  let describing = $state(false);
+  let bodyField = $state<Input>();
+
+  $effect(() => {
+    if (describing) bodyField?.focus();
+  });
 
   $effect(() => {
     void app.version;
@@ -429,16 +437,34 @@
 
         <View style={{ gap: 6 }}>
           <Text style={{ ...eyebrow, paddingX: 7 }}>Description</Text>
-          <Input
-            bind:value={body}
-            multiline
-            rows={4}
-            placeholder="Add a description…"
-            style={{ fontSize: 14, lineHeight: 22, color: c.text, paddingX: 6, paddingY: 6, radius: 8, background: "transparent", borderWidth: 1, borderColor: "transparent" }}
-            hover={{ background: c.raised }}
-            focus={{ background: c.bg, borderColor: c.accent }}
-            oncommit={() => body !== issue?.body && void set("body", body)}
-          />
+          {#if describing || !body.trim()}
+            <Input
+              bind:this={bodyField}
+              bind:value={body}
+              multiline
+              rows={4}
+              placeholder="Add a description…  Markdown works"
+              style={{ fontFamily: describing ? "mono" : "sans", fontSize: describing ? 13 : 14, lineHeight: 22, color: c.text, paddingX: 6, paddingY: 6, radius: 8, background: "transparent", borderWidth: 1, borderColor: "transparent" }}
+              hover={{ background: c.raised }}
+              focus={{ background: c.bg, borderColor: c.accent }}
+              onfocus={() => (describing = true)}
+              oncommit={() => {
+                if (body !== issue?.body) void set("body", body);
+                describing = false;
+              }}
+              onkey={(e) => {
+                if (e.key !== "Escape") return;
+                e.preventDefault();
+                e.stopPropagation();
+                bodyField?.blur();
+                describing = false;
+              }}
+            />
+          {:else}
+            <View style={{ paddingX: 7, paddingY: 4, radius: 8 }} hover={{ background: c.raised }}>
+              <Markdown source={body} size={14} onpress={() => (describing = true)} />
+            </View>
+          {/if}
         </View>
 
         <View style={{ gap: 4 }}>
@@ -512,7 +538,7 @@
                   <Text style={{ fontSize: 13, fontWeight: "medium" }}>{comment.author ?? "?"}</Text>
                   <Text style={{ fontSize: 12, color: c.faint }}>{comment.pending ? "sending…" : ago(comment.created)}</Text>
                 </View>
-                <Text style={{ fontSize: 14, lineHeight: 21, color: c.text }}>{comment.body}</Text>
+                <Markdown source={comment.body} size={14} />
               </View>
             </View>
           {/each}

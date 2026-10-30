@@ -11,5 +11,8 @@
     "svelte": "^5.57.0",
     "svelte-check": "^4.7.7",
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "marked": "^18.1.2"
   }
 }
