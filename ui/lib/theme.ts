@@ -1,24 +1,49 @@
-// Colours and the few styles everything shares. Dark, quiet surfaces; colour only where it means
-// something (a status, a label, a selection).
-import type { Style } from "@neoworks/svelte-gpui/ui";
+// Colours and the few styles everything shares, from the NeoWorks design system's dark theme:
+// warm greys, hairline borders, a white fill for the one main action, lake blue for selection and
+// focus. Colour only where it means something (a status, a label, a selection).
+import { themes } from "@neoworks/svelte-gpui-ui";
+import type { Shadow, Style } from "@neoworks/svelte-gpui/ui";
+
+const t = themes.dark;
 
 export const c = {
-  bg: "#0e0f11",
-  dots: "#1c1e22",
-  surface: "#16171a",
-  raised: "#1d1f23",
-  hover: "#25272c",
-  border: "#2a2c32",
-  borderStrong: "#3a3d44",
-  text: "#e7e7ea",
-  muted: "#8d9099",
-  faint: "#5d6068",
-  accent: "#7c8cff",
-  accentSoft: "#7c8cff33",
-  danger: "#f2555a",
-  warn: "#d6a03a",
-  ok: "#4cc27a",
+  bg: t.colors.canvas,
+  dots: t.scales.grey[4],
+  surface: t.colors.surface,
+  raised: t.colors.sunken,
+  hover: t.colors.hover,
+  pressed: t.colors.pressed,
+  border: t.colors.line,
+  borderSoft: t.scales.grey[5],
+  borderStrong: t.colors.lineStrong,
+  text: t.colors.text,
+  muted: t.colors.muted,
+  faint: t.colors.faint,
+  fill: t.colors.fill,
+  fillHover: t.colors.fillHover,
+  onFill: t.colors.onFill,
+  accent: t.scales.lake[9],
+  accentHover: t.scales.lake[10],
+  accentText: t.scales.lake[11],
+  accentSoft: "#4576b433",
+  onAccent: t.colors.text,
+  danger: t.colors.danger,
+  dangerSoft: t.colors.dangerSoft,
+  warn: t.colors.warning,
+  ok: t.colors.success,
+  pine: t.colors.pine,
 };
+
+export const radii = { control: 8, card: 12, panel: 16 };
+
+/** Floating things: menus, sheets, the toolbar. */
+export const shadow: Shadow[] = [
+  { x: 0, y: 0, blur: 0, spread: 1, color: "rgba(255, 255, 255, 0.04)" },
+  { x: 0, y: 12, blur: 32, spread: -8, color: "rgba(0, 0, 0, 0.55)" },
+];
+
+/** Easing for things that arrive: fast out, soft landing. */
+export const ease = { duration: 180, easing: "ease-out" } as const;
 
 /** GitHub's option colours (issue fields, our own Open/Closed). */
 export const tones: Record<string, string> = {
@@ -49,9 +74,9 @@ export const text = {
 };
 
 export const button: Style = {
-  paddingX: 10,
-  paddingY: 5,
-  radius: 6,
+  paddingX: 12,
+  height: 30,
+  radius: 15,
   background: c.raised,
   borderWidth: 1,
   borderColor: c.border,
@@ -65,9 +90,9 @@ export const button: Style = {
 export const buttonHover: Style = { background: c.hover, borderColor: c.borderStrong };
 
 export const ghost: Style = {
-  paddingX: 8,
-  paddingY: 4,
-  radius: 6,
+  paddingX: 10,
+  height: 30,
+  radius: 15,
   color: c.muted,
   fontSize: 12,
   gap: 6,
@@ -78,9 +103,9 @@ export const ghost: Style = {
 export const ghostHover: Style = { background: c.hover, color: c.text };
 
 export const field: Style = {
-  paddingX: 8,
-  paddingY: 6,
-  radius: 6,
+  paddingX: 10,
+  paddingY: 7,
+  radius: 8,
   background: c.bg,
   borderWidth: 1,
   borderColor: c.border,
@@ -89,3 +114,11 @@ export const field: Style = {
 };
 
 export const fieldFocus: Style = { borderColor: c.accent };
+
+/** The one main action: white on dark, as on neoworks.dev. */
+export const primary: Style = { ...button, background: c.fill, borderColor: c.fill, color: c.onFill, fontWeight: "medium" };
+
+export const primaryHover: Style = { background: c.fillHover, borderColor: c.fillHover };
+
+/** A small uppercase heading over a group, as the site's section labels. */
+export const eyebrow: Style = { fontSize: 11, fontWeight: "medium", color: c.faint, uppercase: true };
