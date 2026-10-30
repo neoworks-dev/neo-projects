@@ -1,0 +1,24 @@
+query RepoIssues($owner: String!, $name: String!, $since: DateTime, $after: String) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 50, after: $after, orderBy: {field: UPDATED_AT, direction: ASC}, filterBy: {since: $since}) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        id number url title body state stateReason createdAt updatedAt
+        author { login }
+        issueType { name }
+        milestone { title }
+        comments { totalCount }
+        labels(first: 50) { nodes { id name color } }
+        assignees(first: 20) { nodes { id login } }
+        blockedBy(first: 50) { nodes { id number title state url repository { nameWithOwner } } }
+        parent { id number title state url repository { nameWithOwner } }
+        issueFieldValues(first: 20) { nodes { __typename
+          ... on IssueFieldSingleSelectValue { optionId name field { ... on IssueFieldSingleSelect { id } } }
+          ... on IssueFieldTextValue { value field { ... on IssueFieldText { id } } }
+          ... on IssueFieldDateValue { value field { ... on IssueFieldDate { id } } }
+          ... on IssueFieldNumberValue { value field { ... on IssueFieldNumber { id } } }
+        } }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "np-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Neoworks Projects: the cache and GitHub sync, without the window"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde_json = "1"
+thiserror = "2"
+ureq = { version = "2", features = ["json"] }
+uuid = { version = "1", features = ["v7"] }

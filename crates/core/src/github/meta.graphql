@@ -1,0 +1,16 @@
+query RepoMeta($owner: String!, $name: String!) {
+  viewer { login }
+  repository(owner: $owner, name: $name) {
+    id url isArchived
+    owner { __typename login
+      ... on Organization { issueFields(first: 50) { nodes { __typename
+        ... on IssueFieldSingleSelect { id name options { id name color } }
+        ... on IssueFieldText { id name }
+        ... on IssueFieldDate { id name }
+        ... on IssueFieldNumber { id name }
+      } } }
+    }
+    labels(first: 100) { nodes { id name color } }
+    assignableUsers(first: 100) { nodes { id login } }
+  }
+}
