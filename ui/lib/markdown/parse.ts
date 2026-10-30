@@ -22,8 +22,65 @@ const obsidianEmbed: TokenizerExtension = {
   },
 };
 
-/** GitHub-flavoured: tables, task lists, strikethrough and autolinks, and Obsidian's image embeds. */
-const markdown = new Marked({ gfm: true, breaks: false, extensions: [obsidianEmbed] });
+/** A LaTeX formula, `$…$` in a line or `$$…$$` on lines of its own (display style). */
+export interface MathToken {
+  type: "math";
+  raw: string;
+  text: string;
+  display: boolean;
+}
+
+const displayBlock = /^\$\$[ \t]*\n?([\s\S]+?)\n?[ \t]*\$\$[ \t]*(?:\n+|$)/;
+const displayInline = /^\$\$([\s\S]+?)\$\$/;
+// As GitHub reads it: no space just inside the dollars, and no digit right after the closing
+// one, so "$5 and $10" stays text.
+const inlineMath = /^\$(?![\s$])((?:\\[\s\S]|[^\\$])+?)(?<!\s)\$(?!\d)/;
+
+function startOfMath(src: string): number | undefined {
+  const at = src.indexOf("$");
+  if (at < 0) return undefined;
+  return at;
+}
+
+const mathBlock: TokenizerExtension = {
+  name: "math",
+  level: "block",
+  // Where a paragraph may end for a block: `$$` at the start of a line only.
+  start: (src) => {
+    const match = /(^|\n)\$\$/.exec(src);
+    if (!match) return undefined;
+    return match.index + match[1].length;
+  },
+  tokenizer(src) {
+    const match = displayBlock.exec(src);
+    if (!match) return undefined;
+    const token: MathToken = { type: "math", raw: match[0], text: match[1].trim(), display: true };
+    return token;
+  },
+};
+
+const mathInline: TokenizerExtension = {
+  name: "math",
+  level: "inline",
+  start: startOfMath,
+  tokenizer(src) {
+    const display = displayInline.exec(src);
+    if (display) {
+      const token: MathToken = { type: "math", raw: display[0], text: display[1].trim(), display: true };
+      return token;
+    }
+    const match = inlineMath.exec(src);
+    if (!match) return undefined;
+    const token: MathToken = { type: "math", raw: match[0], text: match[1], display: false };
+    return token;
+  },
+};
+
+/**
+ * GitHub-flavoured: tables, task lists, strikethrough and autolinks. And what Obsidian and GitHub
+ * add: image embeds and LaTeX math.
+ */
+const markdown = new Marked({ gfm: true, breaks: false, extensions: [obsidianEmbed, mathBlock, mathInline] });
 
 export function parse(source: string): Token[] {
   return markdown.lexer(source);

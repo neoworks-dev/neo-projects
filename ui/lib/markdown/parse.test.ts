@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Tokens } from "marked";
-import { imageLink, imageSources, images, links, onlyImages, parse, resolveSrc } from "./parse.ts";
+import { imageLink, imageSources, images, links, onlyImages, parse, resolveSrc, type MathToken } from "./parse.ts";
 
 test("parses GitHub's extensions", () => {
   const tokens = parse("| a | b |\n|---|---|\n| 1 | 2 |\n\n- [x] done\n- [ ] todo\n\n~~gone~~");
@@ -51,6 +51,24 @@ test("looks for a relative image in the note's folder, then the workspace", () =
   expect(imageSources("a.png", null, "/w")).toEqual(["/w/a.png"]);
   expect(imageSources("a.png", null, null)).toEqual(["a.png"]);
   expect(imageSources("https://x.y/a.png", "/w/Notes", "/w")).toEqual(["https://x.y/a.png"]);
+});
+
+test("reads LaTeX math in a line and on lines of its own", () => {
+  const tokens = parse("The area is $\\pi r^2$, or\n\n$$\n\\int_0^1 x\\,dx = \\tfrac{1}{2}\n$$\n\nand $$e^{i\\pi}$$ too.");
+  const inline = (tokens[0] as Tokens.Paragraph).tokens.find((t) => t.type === "math") as unknown as MathToken;
+  expect([inline.text, inline.display]).toEqual(["\\pi r^2", false]);
+  const block = tokens.find((t) => t.type === "math") as unknown as MathToken;
+  expect([block.text, block.display]).toEqual(["\\int_0^1 x\\,dx = \\tfrac{1}{2}", true]);
+  const last = tokens.filter((t) => t.type === "paragraph").at(-1) as Tokens.Paragraph;
+  const display = last.tokens.find((t) => t.type === "math") as unknown as MathToken;
+  expect([display.text, display.display]).toEqual(["e^{i\\pi}", true]);
+});
+
+test("leaves dollars that aren't math as text", () => {
+  for (const source of ["It costs $5 and $10.", "A lone $ sign", "Escaped \\$x$ stays", "`$x$` in code"]) {
+    const paragraph = parse(source)[0] as Tokens.Paragraph;
+    expect(paragraph.tokens.some((t) => t.type === "math")).toBe(false);
+  }
 });
 
 test("links a dropped image by a name that survives spaces", () => {

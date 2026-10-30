@@ -3602,6 +3602,7 @@ name = "neoworks-projects"
 version = "0.1.0"
 dependencies = [
  "np-core",
+ "rquickjs",
  "rusqlite",
  "serde",
  "serde_json",
