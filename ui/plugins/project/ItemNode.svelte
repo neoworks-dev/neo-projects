@@ -17,6 +17,7 @@
     borderWidth: selected ? 2 : 1,
     borderColor: selected ? c.accent : c.border,
     overflow: "hidden" as const,
+    transition: 140,
   });
 </script>
 

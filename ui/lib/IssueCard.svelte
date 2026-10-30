@@ -38,6 +38,7 @@
     borderColor: selected ? c.accent : card.conflict ? c.danger : c.border,
     overflow: "hidden",
     opacity: closed ? 0.6 : 1,
+    transition: 140,
   }}
   hover={{ borderColor: selected ? c.accent : c.borderStrong }}
 >

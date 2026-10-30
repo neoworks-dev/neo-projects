@@ -3,12 +3,13 @@
   // what is in progress, and a bar of the Status split.
   import { Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Project } from "../../lib/api.ts";
-  import { c, tone } from "../../lib/theme.ts";
+  import { c, projectColor, projectInitials, tone } from "../../lib/theme.ts";
 
   let { project, zoom, selected }: { project: Project; zoom: number; selected: boolean } = $props();
 
   const s = (n: number) => n * zoom;
   const summary = $derived(project.summary);
+  const tint = $derived(projectColor(project.name));
   const total = $derived(summary ? summary.split.reduce((sum, part) => sum + part.count, 0) : 0);
 </script>
 
@@ -22,16 +23,33 @@
     borderWidth: selected ? 2 : 1,
     borderColor: selected ? c.accent : c.border,
     overflow: "hidden",
+    transition: 140,
   }}
   hover={{ borderColor: selected ? c.accent : c.borderStrong }}
 >
-  <View style={{ gap: s(2) }}>
-    <Text style={{ fontSize: s(zoom < 0.5 ? 30 : 16), fontWeight: "semibold", color: c.text, truncate: true }}>
-      {project.name}
-    </Text>
-    {#if zoom >= 0.5}
-      <Text style={{ fontSize: s(11), color: c.faint, truncate: true }}>{project.repo ?? "Local project"}</Text>
-    {/if}
+  <View style={{ direction: "row", align: "center", gap: s(10) }}>
+    <View
+      style={{
+        size: s(34),
+        radius: s(9),
+        align: "center",
+        justify: "center",
+        background: tint.soft,
+        borderWidth: 1,
+        borderColor: tint.line,
+        shrink: 0,
+      }}
+    >
+      <Text style={{ fontSize: s(12), fontWeight: "semibold", color: tint.text }}>{projectInitials(project.name)}</Text>
+    </View>
+    <View style={{ gap: s(2), flex: 1, minWidth: 0 }}>
+      <Text style={{ fontSize: s(zoom < 0.5 ? 30 : 17), color: c.text, truncate: true }}>
+        {project.name}
+      </Text>
+      {#if zoom >= 0.5}
+        <Text style={{ fontSize: s(11), color: c.faint, truncate: true }}>{project.repo ?? "Local project"}</Text>
+      {/if}
+    </View>
   </View>
   {#if summary && zoom >= 0.5}
     <View style={{ direction: "row", gap: s(14) }}>

@@ -12,7 +12,7 @@ export interface KeyEvent {
   defaultPrevented: boolean;
   preventDefault(): void;
   /** The focused element, which the host names `g-input` for a text field. */
-  target?: { localName?: string } | null;
+  target?: unknown;
 }
 
 /**
@@ -21,7 +21,8 @@ export interface KeyEvent {
  * them from the text. Escape and chords with Ctrl, Alt or Meta still reach the bindings.
  */
 export function typing(event: KeyEvent): boolean {
-  if (event.target?.localName !== "g-input") return false;
+  const target = event.target as { localName?: string } | null | undefined;
+  if (target?.localName !== "g-input") return false;
   if (event.ctrlKey || event.altKey || event.metaKey) return false;
   return event.key !== "Escape";
 }

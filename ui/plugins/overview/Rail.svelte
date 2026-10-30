@@ -7,7 +7,7 @@
   import squares from "@phosphor-icons/core/regular/squares-four.svg";
   import type { Project } from "../../lib/api.ts";
   import { app } from "../../lib/state.svelte.ts";
-  import { c, projectColor } from "../../lib/theme.ts";
+  import { c, projectColor, projectInitials } from "../../lib/theme.ts";
   import { dialogs } from "./dialogs.svelte.ts";
 
   let projects = $state<Project[]>([]);
@@ -21,12 +21,6 @@
   });
 
   const open = $derived(app.route.view === "project" ? app.route.project : null);
-
-  function initials(name: string): string {
-    const words = name.split(/[-_ .]+/).filter(Boolean);
-    if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  }
 </script>
 
 {#snippet marker(on: boolean)}
@@ -87,7 +81,7 @@
           hover={{ borderColor: tint.solid }}
           onpress={() => app.open({ view: "project", project: project.folder })}
         >
-          <Text style={{ fontSize: 12, fontWeight: "semibold", color: tint.text }}>{initials(project.name)}</Text>
+          <Text style={{ fontSize: 12, fontWeight: "semibold", color: tint.text }}>{projectInitials(project.name)}</Text>
         </Button>
       </View>
     </Tooltip>

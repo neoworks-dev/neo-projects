@@ -129,6 +129,13 @@ export function projectColor(name: string): { solid: string; soft: string; line:
   return { solid: scale[9], soft: scale[3], line: scale[6], text: scale[11] };
 }
 
+/** The two letters on a project's tile: the first of two words, or the first two of one. */
+export function projectInitials(name: string): string {
+  const words = name.split(/[-_ .]+/).filter(Boolean);
+  if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
 /** The one main action: white on dark, as on neoworks.dev. */
 export const primary: Style = { ...button, background: c.fill, borderColor: c.fill, color: c.onFill, fontWeight: "medium" };
 

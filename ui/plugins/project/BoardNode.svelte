@@ -79,8 +79,8 @@
         ondrop={({ data }) => {
           if (isCard(data)) void app.run(() => app.api.moveCard(data.card.node, column.key));
         }}
-        style={{ flex: 1, minWidth: 0, radius: s(10), background: c.bg, padding: s(6), gap: s(6) }}
-        over={{ background: c.accentSoft }}
+        style={{ flex: 1, minWidth: 0, radius: s(10), background: c.bg, padding: s(6), gap: s(6), borderWidth: 1, borderColor: "transparent", transition: 140 }}
+        over={{ background: c.accentSoft, borderColor: c.accent }}
       >
         <View style={{ direction: "row", align: "center", gap: s(6), paddingX: s(4), height: s(26) }}>
           <View style={{ width: s(8), height: s(8), radius: s(4), background: tone(column.color) }} />
