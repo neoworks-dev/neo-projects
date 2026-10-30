@@ -13,7 +13,9 @@ mod sync;
 
 use std::sync::Arc;
 
-use svelte_gpui::{Commands, Options};
+use svelte_gpui::gpui::AppContext as _;
+use svelte_gpui::{Commands, Elements, Options};
+use svelte_gpui_editor::{Editor, NoLanguageService, SharedDocuments, Signals};
 
 fn main() {
     let options = Options::from_command_line().unwrap_or_else(|| {
@@ -27,5 +29,14 @@ fn main() {
     {
         eprintln!("couldn't open {}: {e}", root.display());
     }
-    svelte_gpui::run(options.commands(commands::all(commands, app)));
+    // The note sheet writes Markdown in svelte-gpui's editor, whose documents live here.
+    let documents = SharedDocuments::new(commands.emitter());
+    let commands = documents.register(commands::all(commands, app));
+    let signals = Signals::default();
+    let elements = Elements::new().register("editor", move |host, cx| {
+        let documents = documents.clone();
+        let signals = signals.clone();
+        cx.new(|cx| Editor::new(documents, NoLanguageService::shared(), &signals, host, cx))
+    });
+    svelte_gpui::run(options.commands(commands).elements(elements));
 }
