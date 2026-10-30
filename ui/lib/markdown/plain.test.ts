@@ -11,6 +11,8 @@ test("drops the syntax and keeps the words", () => {
     "> quoted",
     "![shot](a.png) ![[b.png]]",
     "---",
+    "| a | b |",
+    "|---|---|",
     "```ts",
     "const hidden = 1;",
     "```",

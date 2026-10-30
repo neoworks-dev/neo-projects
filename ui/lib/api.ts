@@ -64,6 +64,10 @@ export interface Project {
   repoId: string | null;
   /** No repository: its issues are local files. */
   local: boolean;
+  /** The project's folder on disk. */
+  abs: string;
+  /** Folders outside the workspace the project works in, by their root name. */
+  roots: { name: string; path: string }[];
   summary: Summary | null;
 }
 
@@ -203,6 +207,12 @@ export interface GithubRepo {
   taken: boolean;
 }
 
+export interface DirEntry {
+  name: string;
+  path: string;
+  dir: boolean;
+}
+
 export const api = {
   workspace: () => invoke<{ path: string | null }>("workspace"),
   openWorkspace: (path: string) => invoke<{ path: string }>("workspace_open", { path }),
@@ -235,6 +245,7 @@ export const api = {
   linkFiles: (paths: string[]) => invoke<CanvasNode[]>("files_link", { paths }),
   linkUrl: (url: string) => invoke<CanvasNode>("url_link", { url }),
   open: (target: string) => invoke<null>("open_external", { target }),
+  listDir: (path: string) => invoke<DirEntry[]>("dir_list", { path }),
   highlight: (code: string, lang: string) => invoke<{ text: string; kind: string }[]>("highlight", { code, lang }),
   syncNow: () => invoke<null>("sync_now"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),

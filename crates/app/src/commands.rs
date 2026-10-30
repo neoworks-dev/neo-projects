@@ -254,6 +254,9 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         app.emitter.emit("changed", json!({"reason": "board"}));
         Ok(Value::Null)
     });
+    command!("dir_list", |_app: &App, args: Value| {
+        Ok(json!(workspace::list_dir(Path::new(arg(&args, "path")?)).map_err(fail)?))
+    });
     command!("highlight", |_app: &App, args: Value| {
         Ok(json!(np_core::highlight::highlight(arg(&args, "code")?, args["lang"].as_str().unwrap_or(""))))
     });

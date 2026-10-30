@@ -22,7 +22,8 @@ export function plainText(markdown: string, limit = 280): string {
       inFence = !inFence;
       continue;
     }
-    if (inFence || rule.test(raw)) continue;
+    // Tables read badly as a run of words, so a card leaves them out.
+    if (inFence || rule.test(raw) || raw.trimStart().startsWith("|")) continue;
     const line = raw
       .replace(heading, "")
       .replace(quote, "")

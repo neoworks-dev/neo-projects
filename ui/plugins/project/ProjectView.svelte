@@ -5,6 +5,7 @@
   import { Button, Input, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
   import kanban from "@phosphor-icons/core/regular/kanban.svg";
   import linkIcon from "@phosphor-icons/core/regular/link.svg";
+  import treeView from "@phosphor-icons/core/regular/tree-view.svg";
   import notePencil from "@phosphor-icons/core/regular/note-pencil.svg";
   import { fade, fly } from "svelte/transition";
   import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
@@ -15,6 +16,7 @@
   import { app } from "../../lib/state.svelte.ts";
   import { c, eyebrow, field, fieldFocus, ghost, radii, shadow } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
+  import Files, { isFileDrag } from "./Files.svelte";
   import ItemNode from "./ItemNode.svelte";
   import { projectKeys } from "./keys.svelte.ts";
 
@@ -39,7 +41,11 @@
     if (node) add(node, centre());
   }
 
+  /** The file explorer at the left. */
+  let filesOpen = $state(false);
+
   const tools: Tool[] = [
+    { icon: treeView, label: "Files", key: "F", onpress: () => (filesOpen = !filesOpen) },
     { icon: notePencil, label: "Note", key: "N", onpress: () => void newNote(centre()) },
     { icon: linkIcon, label: "Link", key: "L", onpress: () => (linkOpen = !linkOpen) },
     { icon: kanban, label: "Notes board", onpress: () => void newBoard() },
@@ -97,10 +103,18 @@
     });
   }
 
+  /** Adds a node near `at`, where there is room. */
   function add(node: CanvasNode, at: Point) {
     if (!data) return;
     const spot = freeSpot(nodes, at, node.width, node.height);
     save([...data.nodes, { ...node, x: Math.round(spot.x), y: Math.round(spot.y) }]);
+    selected = node.id;
+  }
+
+  /** Adds a node centred on where it was dropped: a drop chooses its place. */
+  function place(node: CanvasNode, at: Point) {
+    if (!data) return;
+    save([...data.nodes, { ...node, x: Math.round(at.x - node.width / 2), y: Math.round(at.y - node.height / 2) }]);
     selected = node.id;
   }
 
@@ -169,6 +183,10 @@
   async function files(paths: string[], at: Point) {
     const linked = await app.run(() => app.api.linkFiles(paths));
     if (!linked || !data) return;
+    if (linked.length === 1) {
+      place(linked[0], at);
+      return;
+    }
     let next = [...data.nodes];
     for (const node of linked) {
       const spot = freeSpot(
@@ -187,14 +205,18 @@
   }
 
   function dropped(d: unknown, at: Point) {
+    if (isFileDrag(d)) {
+      void files([d.path], at);
+      return;
+    }
     if (!isCard(d)) return;
     // A local issue is a file of the workspace, so it is placed as one.
     if (d.card.local) {
-      add({ id: newId(), type: "file", file: d.card.node.slice("issue:".length), x: at.x, y: at.y, width: 280, height: 120 }, at);
+      place({ id: newId(), type: "file", file: d.card.node.slice("issue:".length), x: at.x, y: at.y, width: 280, height: 120 }, at);
       return;
     }
     if (!d.card.url) return;
-    add({ id: newId(), type: "link", url: d.card.url, x: at.x, y: at.y, width: 280, height: 120 }, at);
+    place({ id: newId(), type: "link", url: d.card.url, x: at.x, y: at.y, width: 280, height: 120 }, at);
   }
 
   function uriOf(id: string): string | null {
@@ -264,10 +286,12 @@
     projectKeys.remove = removeSelected;
     projectKeys.note = () => void newNote(centre());
     projectKeys.link = () => (linkOpen = true);
+    projectKeys.files = () => (filesOpen = !filesOpen);
     return () => {
       projectKeys.remove = null;
       projectKeys.note = null;
       projectKeys.link = null;
+      projectKeys.files = null;
     };
   });
 </script>
@@ -287,7 +311,7 @@
       onmoved={moved}
       onconnect={(from, to) => (connecting = { from, to })}
       onfiles={(paths, at) => void files(paths, at)}
-      accept={isCard}
+      accept={(d) => isCard(d) || isFileDrag(d)}
       ondropdata={dropped}
     >
       {#snippet node(n, zoom)}
@@ -300,6 +324,16 @@
     </Viewport>
 
     <Toolbar {tools} bind:view {size} onfit={fit} />
+
+    {#if filesOpen}
+      <Presence
+        in={[fly, { x: -24, duration: 220 }]}
+        out={[fade, { duration: 140 }]}
+        style={{ position: "absolute", top: 12, left: 12, bottom: 12, direction: "row" }}
+      >
+        <Files project={data.project} onclose={() => (filesOpen = false)} />
+      </Presence>
+    {/if}
 
     {#if linkOpen}
       <Presence

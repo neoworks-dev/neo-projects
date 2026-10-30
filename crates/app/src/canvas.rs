@@ -47,6 +47,8 @@ pub fn project_json(ws: &Workspace, cache: &Cache, p: &Project) -> Result<Value>
         "repo": repo,
         "repoId": repo_id,
         "local": repo.is_none(),
+        "abs": p.folder,
+        "roots": p.roots.iter().filter_map(|r| ws.root_path(r).map(|path| json!({"name": r, "path": path}))).collect::<Vec<_>>(),
         "summary": summary,
     }))
 }

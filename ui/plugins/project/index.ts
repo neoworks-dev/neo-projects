@@ -23,6 +23,10 @@ export const project = {
       if (app.state.route.view !== "project" || !projectKeys.link || app.state.selection?.kind === "note") return false;
       projectKeys.link();
     });
+    keymap.bind("f", () => {
+      if (app.state.route.view !== "project" || !projectKeys.files || app.state.selection?.kind === "note") return false;
+      projectKeys.files();
+    });
     keymap.bind("escape", () => {
       if (app.state.selection) {
         app.state.select(null);
