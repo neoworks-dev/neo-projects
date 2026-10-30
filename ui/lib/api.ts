@@ -252,6 +252,8 @@ export const api = {
   /** Sets one front matter key; null removes it. */
   setNoteProp: (path: string, key: string, value: unknown) => invoke<Note>("note_prop", { path, key, value }),
   renameNoteProp: (path: string, from: string, to: string) => invoke<Note>("note_prop_rename", { path, from, to }),
+  /** Copies a file into the note's folder; answers with the name the note links it by. */
+  attachToNote: (path: string, file: string) => invoke<string>("note_attach", { path, file }),
   linkFiles: (paths: string[]) => invoke<CanvasNode[]>("files_link", { paths }),
   linkUrl: (url: string) => invoke<CanvasNode>("url_link", { url }),
   open: (target: string) => invoke<null>("open_external", { target }),

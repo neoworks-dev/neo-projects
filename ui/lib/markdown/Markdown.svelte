@@ -24,6 +24,7 @@
   const ctx = $derived({
     size,
     base,
+    workspace: app.workspace,
     onlink: onlink ?? ((href: string) => void app.run(() => app.api.open(href))),
     onplain: () => onpress?.(),
     interactive,

@@ -11,11 +11,13 @@
   import { fade, fly } from "svelte/transition";
   import type { Note } from "../../lib/api.ts";
   import Markdown from "../../lib/markdown/Markdown.svelte";
+  import { imageLink } from "../../lib/markdown/parse.ts";
   import Properties from "./Properties.svelte";
   import { app } from "../../lib/state.svelte.ts";
   import { c, radii, shadow } from "../../lib/theme.ts";
   import { icons } from "../../lib/icons.ts";
   const { collapse: arrowsIn, expand: arrowsOut, external, close } = icons;
+  const imageFile = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
 
   let { path }: { path: string } = $props();
 
@@ -26,7 +28,7 @@
   let full = $state(false);
   let dirty = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let editor = $state<{ focus(): void }>();
+  let editor = $state<{ focus(): void; apply(command: { type: string; text: string }): Promise<unknown> }>();
 
   /** The editor's documents, and the one that holds the body of the note at `documentPath`. */
   const documents = gpuiDocumentHost();
@@ -81,6 +83,21 @@
     if (text === body) return;
     body = text;
     typed();
+  }
+
+  /** Images dropped on the body are copied next to the note and linked where the cursor is. */
+  async function attach(paths: string[]) {
+    if (!note) return;
+    const links: string[] = [];
+    for (const path of paths.filter((p) => imageFile.test(p))) {
+      const name = await app.run(() => app.api.attachToNote(note!.path, path));
+      if (name) links.push(imageLink(name));
+    }
+    if (links.length === 0) return;
+    editor?.focus();
+    // The line break keeps a link dropped at the start of a heading or list item off its marker;
+    // inside a paragraph, one break doesn't end it.
+    await editor?.apply({ type: "insert_text", text: `${links.join("\n")}\n` });
   }
 
   $effect(() =>
@@ -254,24 +271,26 @@
       <View style={{ flex: 1, align: "center", paddingX: 32 }}>
         <View style={{ width: "full", maxWidth: 720, flex: 1, paddingTop: 28, gap: 18 }}>
           {@render heading()}
-          <Editor
-            bind:this={editor}
-            key="note-body"
-            document={documentId}
-            theme={bodyTheme}
-            wrap
-            lineNumbers={false}
-            style={{ flex: 1 }}
-            onblur={() => void save()}
-            onkey={(e) => {
-              if (e.key === "Escape" || (e.key === "e" && (e.ctrl || e.meta))) {
-                e.preventDefault();
-                e.stopPropagation();
-                void save();
-                editing = false;
-              }
-            }}
-          />
+          <View style={{ flex: 1 }} ondrop={(e) => void attach(e.paths)}>
+            <Editor
+              bind:this={editor}
+              key="note-body"
+              document={documentId}
+              theme={bodyTheme}
+              wrap
+              lineNumbers={false}
+              style={{ flex: 1 }}
+              onblur={() => void save()}
+              onkey={(e) => {
+                if (e.key === "Escape" || (e.key === "e" && (e.ctrl || e.meta))) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void save();
+                  editing = false;
+                }
+              }}
+            />
+          </View>
         </View>
       </View>
     {:else}

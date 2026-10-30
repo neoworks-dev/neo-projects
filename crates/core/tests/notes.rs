@@ -1,8 +1,9 @@
-//! A note's front matter as properties: read in the file's order, renamed in place.
+//! A note's front matter as properties: read in the file's order, renamed in place. And the
+//! files dropped into a note, copied next to it.
 
 use std::path::PathBuf;
 
-use np_core::workspace::{read_props, rename_prop};
+use np_core::workspace::{attach_file, read_props, rename_prop};
 use serde_json::json;
 
 fn file(text: &str) -> (tempfile::TempDir, PathBuf) {
@@ -49,4 +50,22 @@ fn rename_refuses_a_taken_or_missing_key() {
     assert!(rename_prop(&path, "a", "bad: key").is_err());
     rename_prop(&path, "a", "a").unwrap();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+}
+
+#[test]
+fn an_attached_file_is_copied_next_to_the_note_under_a_free_name() {
+    let (dir, _note) = file("body\n");
+    let outside = tempfile::tempdir().unwrap();
+    let photo = outside.path().join("photo.png");
+    std::fs::write(&photo, b"pixels").unwrap();
+
+    let first = attach_file(dir.path(), &photo).unwrap();
+    let second = attach_file(dir.path(), &photo).unwrap();
+    assert_eq!(first, dir.path().join("photo.png"));
+    assert_eq!(second, dir.path().join("photo 2.png"));
+    assert_eq!(std::fs::read(&second).unwrap(), b"pixels");
+
+    // A file already beside the note is linked where it is, not copied again.
+    assert_eq!(attach_file(dir.path(), &first).unwrap(), first);
+    assert!(!dir.path().join("photo 3.png").exists());
 }
