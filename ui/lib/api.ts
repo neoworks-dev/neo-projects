@@ -22,10 +22,14 @@ export interface Card {
   blockedBy: number;
   blocking: number;
   comments: number;
+  /** The start of the description, as Markdown. */
+  excerpt: string;
   url: string | null;
   updated: string | null;
   pending: boolean;
   conflict: boolean;
+  /** A local issue: a Markdown file in its project's Issues folder, `node` being `issue:<path>`. */
+  local?: boolean;
 }
 
 export interface Column {
@@ -58,6 +62,12 @@ export interface Project {
   note: string;
   repo: string | null;
   repoId: string | null;
+  /** No repository: its issues are local files. */
+  local: boolean;
+  /** The project's folder on disk. */
+  abs: string;
+  /** Folders outside the workspace the project works in, by their root name. */
+  roots: { name: string; path: string }[];
   summary: Summary | null;
 }
 
@@ -106,7 +116,7 @@ export interface Arrow {
   from: string;
   to: string;
   label?: string | null;
-  source: "github" | "file" | "derived";
+  source: "github" | "local" | "file" | "derived";
   count?: number;
   /** The two issues' node ids, for a GitHub relationship. */
   issues?: [string, string];
@@ -197,6 +207,12 @@ export interface GithubRepo {
   taken: boolean;
 }
 
+export interface DirEntry {
+  name: string;
+  path: string;
+  dir: boolean;
+}
+
 export const api = {
   workspace: () => invoke<{ path: string | null }>("workspace"),
   openWorkspace: (path: string) => invoke<{ path: string }>("workspace_open", { path }),
@@ -211,6 +227,8 @@ export const api = {
   moveCard: (node: string, column: string) => invoke<null>("move_card", { node, column }),
   createIssue: (repo: string, title: string, column: string | null) =>
     invoke<string>("create_issue", { repo, title, column }),
+  createLocalIssue: (folder: string, title: string, column: string | null) =>
+    invoke<string>("local_issue_create", { folder, title, column }),
   comment: (node: string, body: string) => invoke<null>("comment", { node, body }),
   resolve: (node: string, field: string, keepLocal: boolean) =>
     invoke<null>("resolve", { node, field, keepLocal }),
@@ -227,6 +245,8 @@ export const api = {
   linkFiles: (paths: string[]) => invoke<CanvasNode[]>("files_link", { paths }),
   linkUrl: (url: string) => invoke<CanvasNode>("url_link", { url }),
   open: (target: string) => invoke<null>("open_external", { target }),
+  listDir: (path: string) => invoke<DirEntry[]>("dir_list", { path }),
+  highlight: (code: string, lang: string) => invoke<{ text: string; kind: string }[]>("highlight", { code, lang }),
   syncNow: () => invoke<null>("sync_now"),
   syncStatus: () => invoke<SyncStatus>("sync_status"),
 };

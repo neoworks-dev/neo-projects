@@ -1,22 +1,28 @@
 <script lang="ts">
   // Everything on a project canvas that isn't the board: a note (a card), an image, a file, a web
   // link, an issue placed off the board, a local board. Drawn at `zoom`.
-  import { Image, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
-  import { c } from "../../lib/theme.ts";
+  import { plainText } from "../../lib/markdown/plain.ts";
+  import { c, ring } from "../../lib/theme.ts";
   import LocalBoard from "./LocalBoard.svelte";
+  import { icons } from "../../lib/icons.ts";
+  const { fileText } = icons;
 
   let { item, zoom, selected }: { item: Item; zoom: number; selected: boolean } = $props();
 
   const s = (n: number) => n * zoom;
+  const excerpt = $derived(item.kind === "note" ? plainText(item.excerpt, 240) : "");
   const frame = $derived({
     flex: 1,
     radius: s(10),
     background: c.surface,
-    borderWidth: selected ? 2 : 1,
+    borderWidth: 1,
+    shadow: selected ? ring : null,
     borderColor: selected ? c.accent : c.border,
     overflow: "hidden" as const,
+    transition: 140,
   });
 </script>
 
@@ -25,10 +31,20 @@
     <IssueCard card={item.card} {zoom} {selected} fill showRepo />
   </View>
 {:else if item.kind === "note"}
-  <View style={{ ...frame, padding: s(12), gap: s(6) }} hover={{ borderColor: selected ? c.accent : c.borderStrong }}>
-    <Text style={{ fontSize: s(zoom < 0.45 ? 26 : 14), fontWeight: "semibold", maxLines: 2 }}>{item.title}</Text>
-    {#if zoom >= 0.45 && item.excerpt}
-      <Text style={{ fontSize: s(12), color: c.muted, lineHeight: s(17) }}>{item.excerpt}</Text>
+  <View style={{ ...frame, padding: s(14), gap: s(8) }} hover={{ borderColor: selected ? c.accent : c.borderStrong }}>
+    {#if zoom >= 0.45}
+      <View style={{ direction: "row", align: "center", gap: s(6) }}>
+        <Icon svg={fileText} size={s(13)} color={c.faint} />
+        <Text style={{ fontSize: s(11), color: c.faint }}>Note</Text>
+      </View>
+    {/if}
+    <Text style={{ fontSize: s(zoom < 0.45 ? 26 : 16), lineHeight: s(zoom < 0.45 ? 30 : 21), color: c.text, maxLines: 2 }}>{item.title}</Text>
+    {#if zoom >= 0.45}
+      {#if excerpt}
+        <Text style={{ fontSize: s(12.5), color: c.muted, lineHeight: s(18) }}>{excerpt}</Text>
+      {:else}
+        <Text style={{ fontSize: s(12.5), color: c.faint, lineHeight: s(18) }}>Empty. Double-click to write.</Text>
+      {/if}
     {/if}
   </View>
 {:else if item.kind === "image"}

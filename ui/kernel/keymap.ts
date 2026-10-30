@@ -11,6 +11,20 @@ export interface KeyEvent {
   shiftKey: boolean;
   defaultPrevented: boolean;
   preventDefault(): void;
+  /** The focused element, which the host names `g-input` for a text field. */
+  target?: unknown;
+}
+
+/**
+ * Whether the press is typing into a text field: a plain key while one has focus. The window
+ * hears keys before the field does, so a binding of `n` or `backspace` would otherwise take
+ * them from the text. Escape and chords with Ctrl, Alt or Meta still reach the bindings.
+ */
+export function typing(event: KeyEvent): boolean {
+  const target = event.target as { localName?: string } | null | undefined;
+  if (target?.localName !== "g-input") return false;
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  return event.key !== "Escape";
 }
 
 /** Returning `false` says the key was not used, so the next binding of the chord gets it. */
@@ -78,6 +92,7 @@ export class Keymap {
     const pressed = chord(event);
     if (pressed === undefined) return false;
     for (const observer of [...this.observers]) observer(event);
+    if (typing(event)) return false;
     for (const { run } of [...(this.bindings.get(pressed) ?? [])]) {
       if (run(event) === false) continue;
       event.preventDefault();

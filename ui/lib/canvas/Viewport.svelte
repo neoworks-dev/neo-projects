@@ -29,7 +29,6 @@
   // move it; drag the handle on the selected node's edge onto another node to connect them. Files
   // from other programs and in-app drags (a card from a board) can be dropped anywhere.
   import {
-    Canvas,
     DropTarget,
     Text,
     View,
@@ -41,7 +40,8 @@
   } from "@neoworks/svelte-gpui/ui";
   import type { Snippet } from "svelte";
   import { c } from "../theme.ts";
-  import { arrowEnds, arrowHead, contains, type Point } from "./geometry.ts";
+  import { arrowPath, contains, midpoint, type Point } from "./geometry.ts";
+  import Ink from "./Ink.svelte";
 
   interface Props {
     nodes: N[];
@@ -63,14 +63,10 @@
     onselectarrow?: (id: string | null) => void;
     onmoved?: (id: string, x: number, y: number) => void;
     onconnect?: (from: string, to: string) => void;
-    /** A double press on empty canvas, at that world point. */
-    onbackground?: (at: Point) => void;
     onfiles?: (paths: string[], at: Point) => void;
     /** Which in-app drags the canvas takes, and what to do with one dropped at a world point. */
     accept?: (data: unknown) => boolean;
     ondropdata?: (data: unknown, at: Point) => void;
-    /** Drawn above the arrows and under the nodes: what lives in world space but isn't a node. */
-    overlay?: Snippet<[ViewState]>;
   }
 
   let {
@@ -88,26 +84,27 @@
     onselectarrow,
     onmoved,
     onconnect,
-    onbackground,
     onfiles,
     accept = () => false,
     ondropdata,
-    overlay,
   }: Props = $props();
 
   let box = $state<Layout>({ x: 0, y: 0, width: 0, height: 0 });
-  let ink = $state<Canvas>();
   /** The node being dragged and where it is now (world), until it is dropped. */
   let drag = $state<{ id: string; x: number; y: number; start: Point; from: Point; moved: boolean } | null>(null);
   /** The background being dragged: where the view and the pointer were when it started. */
-  let pan = $state<{ view: ViewState; from: Point } | null>(null);
+  let pan: { view: ViewState; from: Point } | null = null;
+  let panning = $state(false);
   /** An arrow being drawn: from which node, to where the pointer is (viewport coordinates). */
   let link = $state<{ from: string; to: Point } | null>(null);
   let pointer: Point | null = null;
 
   const zoom = $derived(view.zoom);
-  const toScreen = (p: Point): Point => ({ x: (p.x - view.x) * zoom, y: (p.y - view.y) * zoom });
   const toWorld = (p: Point): Point => ({ x: p.x / zoom + view.x, y: p.y / zoom + view.y });
+
+  // Nodes sit in one layer at world position times zoom, and panning only moves that layer, so a
+  // pan changes one style however many nodes there are.
+  const shift = $derived<[number, number]>([-view.x * zoom, -view.y * zoom]);
 
   function placed(n: N): N {
     return drag && drag.id === n.id ? { ...n, x: drag.x, y: drag.y } : n;
@@ -116,85 +113,127 @@
   const shown = $derived(nodes.map(placed));
   const byId = $derived(new Map(shown.map((n) => [n.id, n])));
 
-  /** Screen rects of the nodes that are at least partly in view. */
-  const visible = $derived(
-    shown.filter((n) => {
-      const p = toScreen(n);
-      return p.x + n.w * zoom > -40 && p.y + n.h * zoom > -40 && p.x < box.width + 40 && p.y < box.height + 40;
-    }),
-  );
+  // What is drawn: the view and a margin, in steps, so panning only adds or drops nodes now and
+  // then instead of filtering them on every frame.
+  const cell = 400;
+  const cullKey = $derived.by(() => {
+    if (box.width === 0) return "";
+    const x0 = Math.floor((view.x - cell / zoom) / (cell / zoom));
+    const y0 = Math.floor((view.y - cell / zoom) / (cell / zoom));
+    const x1 = Math.ceil((view.x + (box.width + cell) / zoom) / (cell / zoom));
+    const y1 = Math.ceil((view.y + (box.height + cell) / zoom) / (cell / zoom));
+    return `${x0},${y0},${x1},${y1},${zoom}`;
+  });
+  const visible = $derived.by(() => {
+    if (!cullKey) return shown;
+    const [x0, y0, x1, y1] = cullKey.split(",").map(Number);
+    const unit = cell / zoom;
+    return shown.filter(
+      (n) => n.x + n.w > x0 * unit && n.y + n.h > y0 * unit && n.x < x1 * unit && n.y < y1 * unit,
+    );
+  });
 
-  const midpoints = $derived(
-    arrows.flatMap((a) => {
+  // An arrow's path is kept while neither end moved, so a drag only redraws the arrows on the
+  // dragged node: a new array would make every arrow's canvas draw again.
+  let paths = new Map<string, { key: string; points: Point[]; mid: Point }>();
+
+  /** Arrows in layer coordinates (world times zoom), with their midpoints for labels. */
+  const lines = $derived.by(() => {
+    const next = new Map<string, { key: string; points: Point[]; mid: Point }>();
+    const out = arrows.flatMap((a) => {
       const from = byId.get(a.from);
       const to = byId.get(a.to);
       if (!from || !to) return [];
-      const ends = arrowEnds(from, to);
-      if (!ends) return [];
-      const mid = toScreen({ x: (ends[0].x + ends[1].x) / 2, y: (ends[0].y + ends[1].y) / 2 });
-      return [{ arrow: a, mid }];
-    }),
-  );
-
-  // Arrows are strokes on one Canvas under the nodes, drawn again whenever anything moves.
-  $effect(() => {
-    if (!ink || box.width === 0) return;
-    ink.clear();
-    for (const a of arrows) {
-      const from = byId.get(a.from);
-      const to = byId.get(a.to);
-      if (!from || !to) continue;
-      const ends = arrowEnds(from, to);
-      if (!ends) continue;
-      const [p, q] = [toScreen(ends[0]), toScreen(ends[1])];
-      const chosen = a.id === selectedArrow;
-      const pen = { color: chosen ? c.accent : (a.color ?? c.borderStrong), width: chosen ? 2.5 : 1.75 };
-      ink.line(p.x, p.y, q.x, q.y, pen);
-      const [l, r] = arrowHead(p, q, 9);
-      ink.line(q.x, q.y, l.x, l.y, pen);
-      ink.line(q.x, q.y, r.x, r.y, pen);
-    }
-    if (link) {
-      const from = byId.get(link.from);
-      if (from) {
-        const start = toScreen({ x: from.x + from.w, y: from.y + from.h / 2 });
-        ink.line(start.x, start.y, link.to.x, link.to.y, { color: c.accent, width: 2 });
+      const key = `${from.x},${from.y},${from.w},${from.h},${to.x},${to.y},${to.w},${to.h},${zoom}`;
+      let path = paths.get(a.id);
+      if (path?.key !== key) {
+        const world = arrowPath(from, to);
+        if (!world) return [];
+        const points = world.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
+        path = { key, points, mid: midpoint(points) };
       }
-    }
+      next.set(a.id, path);
+      return [{ arrow: a, points: path.points, mid: path.mid }];
+    });
+    paths = next;
+    return out;
   });
+
+  /** The arrow being drawn, in layer coordinates. */
+  const linkLine = $derived.by(() => {
+    if (!link) return null;
+    const from = byId.get(link.from);
+    if (!from) return null;
+    const at = toWorld(link.to);
+    const world = arrowPath(from, { x: at.x, y: at.y, w: 0, h: 0 });
+    if (!world) return null;
+    return world.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
+  });
+
+  // Pointer moves come faster than frames (a 1000 Hz mouse sends sixteen a frame); only the last
+  // one before each frame is applied.
+  let pending: (() => void) | null = null;
+  let frame = 0;
+  function later(apply: () => void) {
+    pending = apply;
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const run = pending;
+      pending = null;
+      run?.();
+    });
+  }
+  function flush() {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    const run = pending;
+    pending = null;
+    run?.();
+  }
 
   function local(e: PointerEvent): Point {
     return { x: e.windowX - box.x, y: e.windowY - box.y };
   }
 
   function backgroundDown(e: PointerEvent) {
-    if (e.clicks === 2) {
-      onbackground?.(toWorld(local(e)));
-      return;
-    }
     pan = { view: { ...view }, from: { x: e.windowX, y: e.windowY } };
+    panning = true;
     onselect?.(null);
     onselectarrow?.(null);
   }
 
   function backgroundMove(e: PointerEvent) {
     pointer = local(e);
-    if (!pan) return;
-    view = {
-      ...view,
-      x: pan.view.x - (e.windowX - pan.from.x) / zoom,
-      y: pan.view.y - (e.windowY - pan.from.y) / zoom,
-    };
+    const start = pan;
+    if (!start) return;
+    const { windowX, windowY } = e;
+    later(() => {
+      view = {
+        ...view,
+        x: start.view.x - (windowX - start.from.x) / zoom,
+        y: start.view.y - (windowY - start.from.y) / zoom,
+      };
+    });
+  }
+
+  function backgroundUp() {
+    flush();
+    pan = null;
+    panning = false;
   }
 
   function wheel(e: WheelEvent) {
+    const { dx, dy } = e;
     if (e.ctrl || e.meta) {
       const at = pointer ?? { x: box.width / 2, y: box.height / 2 };
-      const before = toWorld(at);
-      const next = Math.min(2.5, Math.max(0.15, zoom * Math.exp(-e.dy / 400)));
-      view = { x: before.x - at.x / next, y: before.y - at.y / next, zoom: next };
+      later(() => {
+        const before = toWorld(at);
+        const next = Math.min(2.5, Math.max(0.15, zoom * Math.exp(-dy / 400)));
+        view = { x: before.x - at.x / next, y: before.y - at.y / next, zoom: next };
+      });
     } else {
-      view = { ...view, x: view.x + e.dx / zoom, y: view.y + e.dy / zoom };
+      later(() => (view = { ...view, x: view.x + dx / zoom, y: view.y + dy / zoom }));
     }
   }
 
@@ -212,13 +251,18 @@
 
   function nodeMove(e: PointerEvent) {
     if (!drag) return;
-    const dx = (e.windowX - drag.from.x) / zoom;
-    const dy = (e.windowY - drag.from.y) / zoom;
-    const moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 3 / zoom;
-    drag = { ...drag, x: Math.round(drag.start.x + dx), y: Math.round(drag.start.y + dy), moved };
+    const { windowX, windowY } = e;
+    later(() => {
+      if (!drag) return;
+      const dx = (windowX - drag.from.x) / zoom;
+      const dy = (windowY - drag.from.y) / zoom;
+      const moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 3 / zoom;
+      drag = { ...drag, x: Math.round(drag.start.x + dx), y: Math.round(drag.start.y + dy), moved };
+    });
   }
 
   function nodeUp() {
+    flush();
     if (drag?.moved) onmoved?.(drag.id, drag.x, drag.y);
     else if (drag) onpress?.(drag.id);
     drag = null;
@@ -229,10 +273,14 @@
   }
 
   function linkMove(e: PointerEvent) {
-    if (link) link = { ...link, to: local(e) };
+    const to = local(e);
+    later(() => {
+      if (link) link = { ...link, to };
+    });
   }
 
   function linkUp() {
+    flush();
     if (!link) return;
     const at = toWorld(link.to);
     const target = [...shown].reverse().find((n) => n.id !== link?.from && contains(n, at));
@@ -251,84 +299,94 @@
 
 <View style={{ flex: 1, overflow: "hidden" }} onlayout={(l) => (box = l)} ondrop={files}>
   <DropTarget {accept} ondrop={dropped} style={{ position: "absolute", inset: 0 }}>
-    <Canvas
-      bind:this={ink}
-      style={{ position: "absolute", inset: 0, background: c.bg, cursor: pan ? "grabbing" : "default" }}
+    <View
+      style={{ position: "absolute", inset: 0, background: c.bg, cursor: panning ? "grabbing" : "default" }}
       ondown={backgroundDown}
       onmove={backgroundMove}
-      onup={() => (pan = null)}
+      onup={backgroundUp}
       onwheel={wheel}
     />
   </DropTarget>
-  {#each midpoints as { arrow, mid } (arrow.id)}
-    {@const chosen = arrow.id === selectedArrow}
-    <View
-      style={{
-        position: "absolute",
-        left: mid.x - (arrow.label ? arrow.label.length * 3.1 + 7 : 5),
-        top: mid.y - (arrow.label ? 10 : 5),
-        direction: "row",
-      }}
-      onpress={() => onselectarrow?.(chosen ? null : arrow.id)}
-    >
-      {#if arrow.label}
-        <View
-          style={{
-            paddingX: 6,
-            height: 20,
-            justify: "center",
-            radius: 10,
-            background: chosen ? c.accent : c.raised,
-            borderWidth: 1,
-            borderColor: chosen ? c.accent : c.border,
-          }}
-        >
-          <Text style={{ fontSize: 11, color: chosen ? "#fff" : c.muted, nowrap: true }}>{arrow.label}</Text>
-        </View>
-      {:else}
-        <View
-          style={{ width: 10, height: 10, radius: 5, background: chosen ? c.accent : c.raised, borderWidth: 1, borderColor: chosen ? c.accent : c.borderStrong }}
-          hover={{ background: c.accent }}
-        />
-      {/if}
-    </View>
-  {/each}
-  {#if overlay}
-    {@render overlay(view)}
-  {/if}
-  {#each visible as n (n.id)}
-    {@const p = toScreen(n)}
-    <View
-      style={{ position: "absolute", left: p.x, top: p.y, width: n.w * zoom, height: n.h * zoom }}
-      ondown={(e) => nodeDown(n, e)}
-      onmove={nodeMove}
-      onup={nodeUp}
-    >
-      {@render node(n, zoom)}
-    </View>
-    {#if linkable && selected === n.id}
+  <View style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, translate: shift }}>
+    {#each lines as { arrow, points } (arrow.id)}
+      {@const chosen = arrow.id === selectedArrow}
+      <Ink {points} color={chosen ? c.accent : (arrow.color ?? c.borderStrong)} width={chosen ? 2.5 : 1.75} />
+    {/each}
+    {#if linkLine}
+      <Ink points={linkLine} color={c.accent} width={2} head={false} />
+    {/if}
+    {#each lines as { arrow, mid } (arrow.id)}
+      {@const chosen = arrow.id === selectedArrow}
       <View
         style={{
           position: "absolute",
-          left: p.x + n.w * zoom - 8,
-          top: p.y + (n.h * zoom) / 2 - 8,
-          width: 16,
-          height: 16,
-          radius: 8,
-          background: c.accent,
-          borderWidth: 2,
-          borderColor: c.bg,
-          cursor: "crosshair",
-          align: "center",
-          justify: "center",
+          left: mid.x - (arrow.label ? arrow.label.length * 3.1 + 7 : 5),
+          top: mid.y - (arrow.label ? 10 : 5),
+          direction: "row",
         }}
-        hover={{ background: "#9aa6ff" }}
-        ondown={(e) => linkDown(n, e)}
-        onmove={linkMove}
-        onup={linkUp}
+        onpress={() => onselectarrow?.(chosen ? null : arrow.id)}
       >
-        <Text style={{ fontSize: 9, color: "#fff", lineHeight: 10 }}>→</Text>
+        {#if arrow.label}
+          <View
+            style={{
+              paddingX: 6,
+              height: 20,
+              justify: "center",
+              radius: 10,
+              background: chosen ? c.accent : c.raised,
+              borderWidth: 1,
+              borderColor: chosen ? c.accent : c.border,
+              transition: 120,
+            }}
+          >
+            <Text style={{ fontSize: 11, color: chosen ? c.onAccent : c.muted, nowrap: true }}>{arrow.label}</Text>
+          </View>
+        {:else}
+          <View
+            style={{ width: 10, height: 10, radius: 5, background: chosen ? c.accent : c.raised, borderWidth: 1, borderColor: chosen ? c.accent : c.borderStrong }}
+            hover={{ background: c.accent }}
+          />
+        {/if}
       </View>
-    {/if}
-  {/each}
+    {/each}
+    {#each visible as n (n.id)}
+      <View
+        style={{ position: "absolute", left: n.x * zoom, top: n.y * zoom, width: n.w * zoom, height: n.h * zoom }}
+        ondown={(e) => nodeDown(n, e)}
+        onmove={nodeMove}
+        onup={nodeUp}
+      >
+        {@render node(n, zoom)}
+      </View>
+      {#if linkable && selected === n.id}
+        <!-- A small dot on the right edge, in a larger hit area so it is easy to grab. -->
+        <View
+          style={{
+            position: "absolute",
+            left: (n.x + n.w) * zoom - 11,
+            top: (n.y + n.h / 2) * zoom - 11,
+            size: 22,
+            align: "center",
+            justify: "center",
+            cursor: "crosshair",
+          }}
+          ondown={(e) => linkDown(n, e)}
+          onmove={linkMove}
+          onup={linkUp}
+        >
+          <View
+            style={{
+              size: 11,
+              radius: 6,
+              background: c.surface,
+              borderWidth: 2,
+              borderColor: c.accent,
+              transition: 120,
+            }}
+            hover={{ background: c.accent }}
+          />
+        </View>
+      {/if}
+    {/each}
+  </View>
 </View>

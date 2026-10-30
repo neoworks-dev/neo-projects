@@ -7,6 +7,7 @@
 pub mod board;
 pub mod canvas;
 pub mod index;
+pub mod issues;
 pub mod note;
 pub mod project;
 pub mod relations;
@@ -235,6 +236,33 @@ pub(crate) fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// One entry of a folder, for the file explorer.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DirEntry {
+    pub name: String,
+    pub path: PathBuf,
+    pub dir: bool,
+}
+
+/// What a folder holds, folders first, each group by name, leaving out what [`walk`] leaves out.
+pub fn list_dir(dir: &Path) -> Result<Vec<DirEntry>> {
+    let read = io(std::fs::read_dir(dir), dir)?;
+    let mut entries: Vec<DirEntry> = read
+        .filter_map(|e| e.ok())
+        .filter(|e| !skipped(&e.file_name().to_string_lossy()))
+        .filter_map(|e| {
+            let path = e.path();
+            let dir = path.is_dir();
+            if dir && e.file_name() == "target" && path.parent().is_some_and(|p| p.join("Cargo.toml").exists()) {
+                return None;
+            }
+            Some(DirEntry { name: e.file_name().to_string_lossy().into_owned(), path, dir })
+        })
+        .collect();
+    entries.sort_by(|a, b| b.dir.cmp(&a.dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    Ok(entries)
+}
+
 /// A file name made from free text: no separators or reserved characters, no leading dots.
 pub(crate) fn safe_filename(title: &str) -> String {
     let cleaned: String =
@@ -302,5 +330,19 @@ mod tests {
         assert_eq!(safe_filename("  .hidden.. "), "hidden");
         assert_eq!(safe_filename("///"), "---");
         assert_eq!(safe_filename(""), "Untitled");
+    }
+
+    #[test]
+    fn list_dir_puts_folders_first_and_skips_hidden_and_build_output() {
+        let dir = tempfile::tempdir().unwrap();
+        for f in ["b.md", "A.png", ".secret", "Cargo.toml"] {
+            std::fs::write(dir.path().join(f), "").unwrap();
+        }
+        for d in ["zeta", "Alpha", "target", "node_modules", ".git"] {
+            std::fs::create_dir(dir.path().join(d)).unwrap();
+        }
+        let names: Vec<(String, bool)> = list_dir(dir.path()).unwrap().into_iter().map(|e| (e.name, e.dir)).collect();
+        let expected = [("Alpha", true), ("zeta", true), ("A.png", false), ("b.md", false), ("Cargo.toml", false)];
+        assert_eq!(names, expected.map(|(n, d)| (n.to_string(), d)));
     }
 }

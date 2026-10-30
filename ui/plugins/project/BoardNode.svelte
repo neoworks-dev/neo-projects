@@ -10,9 +10,11 @@
     Scroll,
     Text,
     View,
+    Icon,
   } from "@neoworks/svelte-gpui/ui";
   import type { Board, Card, Project } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
+  import { icons, stateIcon } from "../../lib/icons.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c, tone } from "../../lib/theme.ts";
 
@@ -38,7 +40,12 @@
     const text = title.trim();
     adding = null;
     title = "";
-    if (!text || !project.repoId) return;
+    if (!text) return;
+    if (project.local) {
+      await app.run(() => app.api.createLocalIssue(project.folder, text, column));
+      return;
+    }
+    if (!project.repoId) return;
     await app.run(() => app.api.createIssue(project.repoId!, text, column === "open" ? null : column));
   }
 
@@ -56,8 +63,8 @@
   }}
 >
   <View style={{ direction: "row", align: "center", gap: s(8), height: s(40), paddingX: s(14), cursor: "grab" }}>
-    <Text style={{ fontSize: s(13), fontWeight: "semibold" }}>Board</Text>
-    <Text style={{ fontSize: s(12), color: c.faint }}>{project.repo}</Text>
+    <Text style={{ fontSize: s(13), fontWeight: "semibold" }}>{project.local ? "Issues" : "Board"}</Text>
+    <Text style={{ fontSize: s(12), color: c.faint }}>{project.repo ?? `${project.folder}/Issues`}</Text>
     {#if !board.statusField && board.columns.length > 0}
       <Text style={{ fontSize: s(11), color: c.faint }}>· no Status field, so Open and Closed</Text>
     {/if}
@@ -74,27 +81,28 @@
         ondrop={({ data }) => {
           if (isCard(data)) void app.run(() => app.api.moveCard(data.card.node, column.key));
         }}
-        style={{ flex: 1, minWidth: 0, radius: s(10), background: c.bg, padding: s(6), gap: s(6) }}
-        over={{ background: c.accentSoft }}
+        style={{ flex: 1, minWidth: 0, radius: s(10), background: c.bg, padding: s(6), gap: s(6), borderWidth: 1, borderColor: "transparent", transition: 140 }}
+        over={{ background: c.accentSoft, borderColor: c.accent }}
       >
         <View style={{ direction: "row", align: "center", gap: s(6), paddingX: s(4), height: s(26) }}>
-          <View style={{ width: s(8), height: s(8), radius: s(4), background: tone(column.color) }} />
+          {@const head = stateIcon({ state: column.done || column.key === "closed" ? "CLOSED" : "OPEN", stateReason: null, fields: { Status: column.name } })}
+          <Icon svg={head.icon} size={s(14)} color={column.key === "none" ? c.faint : head.color} />
           <Text style={{ fontSize: s(12), fontWeight: "semibold", nowrap: true }}>{column.name}</Text>
           <Text style={{ fontSize: s(11), color: c.faint }}>{column.cards.length}</Text>
           {#if placed[column.key]}
             <Text style={{ fontSize: s(10), color: c.faint }}>+{placed[column.key]} on canvas</Text>
           {/if}
           <View style={{ flex: 1 }} />
-          {#if project.repoId}
+          {#if project.repoId || project.local}
             <Button
-              style={{ paddingX: s(5), radius: s(4), color: c.muted, fontSize: s(14) }}
+              style={{ size: s(24), radius: s(6), align: "center", justify: "center", color: c.muted, transition: 120 }}
               hover={{ background: c.hover, color: c.text }}
               onpress={() => {
                 adding = column.key;
                 title = "";
               }}
             >
-              <Text>+</Text>
+              <Icon svg={icons.add} size={s(14)} />
             </Button>
           {/if}
         </View>

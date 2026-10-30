@@ -1,11 +1,18 @@
 <script lang="ts">
-  // One issue, at the right: everything editable goes to GitHub as you (through the outbox), and
-  // shows at once. Title, body, status and fields, labels and assignees, what blocks what, and the
-  // comments.
-  import { Button, Input, Popover, Scroll, Select, Text, View } from "@neoworks/svelte-gpui/ui";
+  // One issue, in the panel at the right. Everything is edited where it is shown and goes to
+  // GitHub as you (through the outbox), showing at once: the title and description as text you
+  // click into, each property as a row whose value opens a picker, then relationships and the
+  // conversation, with the comment box kept at the bottom.
+  import { Button, Icon, Input, Popover, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { Tooltip } from "@neoworks/svelte-gpui-ui";
   import type { Card, IssueDetail, Linked } from "../../lib/api.ts";
+  import Avatar from "../../lib/Avatar.svelte";
+  import Markdown from "../../lib/markdown/Markdown.svelte";
+  import Picker from "../../lib/Picker.svelte";
   import { app } from "../../lib/state.svelte.ts";
-  import { button, buttonHover, c, field, fieldFocus, ghost, ghostHover, labelColor } from "../../lib/theme.ts";
+  import { button, buttonHover, c, eyebrow, labelColor, radii, shadow, tone, tones } from "../../lib/theme.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { external: arrowUpRight, reopen, date: calendar, closeDone: checkCircle, status: circleDashed, field: circleHalf, number: hash, effort: lightning, send, add: plus, priority: signal, labels: tag, text: textIcon, assignees: users, close, closeNotPlanned: notPlanned } = icons;
 
   let { node }: { node: string } = $props();
 
@@ -16,6 +23,14 @@
   let search = $state("");
   let found = $state<Card[]>([]);
   let linking = $state<"blockedBy" | "blocking" | "parent" | null>(null);
+  let searchField = $state<Input>();
+  /** Editing the description's Markdown; otherwise it shows rendered. */
+  let describing = $state(false);
+  let bodyField = $state<Input>();
+
+  $effect(() => {
+    if (describing) bodyField?.focus();
+  });
 
   $effect(() => {
     void app.version;
@@ -42,10 +57,37 @@
     return () => clearTimeout(timer);
   });
 
+  $effect(() => {
+    if (linking) searchField?.focus();
+  });
+
   const set = (field: string, value: unknown) => app.run(() => app.api.setField(node, field, value));
 
   const statusDef = $derived(issue?.fieldDefs.find((f) => f.id === issue?.statusField) ?? null);
   const otherDefs = $derived(issue?.fieldDefs.filter((f) => f.id !== issue?.statusField) ?? []);
+
+  /** Priorities have no colour on GitHub; these match the cards'. */
+  const priorityColor: Record<string, string> = {
+    Urgent: tones.PINK,
+    High: tones.RED,
+    Medium: tones.YELLOW,
+    Low: tones.GREEN,
+  };
+
+  function optionColor(defName: string, option: { name: string; color?: string }): string {
+    if (option.color) return tone(option.color);
+    if (defName === "Priority") return priorityColor[option.name] ?? tones.GRAY;
+    return tones.GRAY;
+  }
+
+  function fieldIcon(name: string, kind: string): string {
+    if (name === "Priority") return signal;
+    if (name === "Effort") return lightning;
+    if (kind === "date") return calendar;
+    if (kind === "number") return hash;
+    if (kind === "text") return textIcon;
+    return circleHalf;
+  }
 
   function setOption(defId: string, optionId: string | null) {
     const def = issue?.fieldDefs.find((f) => f.id === defId);
@@ -112,15 +154,20 @@
     }
   }
 
-  async function send() {
+  async function sendReply() {
     const text = reply.trim();
     if (!text) return;
     reply = "";
     await app.run(() => app.api.comment(node, text));
   }
 
-  function date(iso: string | null): string {
-    return iso ? iso.slice(0, 10) : "";
+  function ago(iso: string | null): string {
+    if (!iso) return "";
+    const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+    if (days < 1) return "today";
+    if (days === 1) return "yesterday";
+    if (days < 30) return `${days} days ago`;
+    return iso.slice(0, 10);
   }
 
   const shown = (raw: string) => {
@@ -132,64 +179,127 @@
       return raw;
     }
   };
+
+  const open = $derived(issue?.state === "OPEN");
+  const stateLabel = $derived(open ? "Open" : issue?.stateReason === "NOT_PLANNED" ? "Not planned" : "Done");
+  const stateColor = $derived(open ? tones.GREEN : issue?.stateReason === "NOT_PLANNED" ? tones.GRAY : tones.PURPLE);
+  const subDone = $derived(issue?.subIssues.filter((s) => s.state !== "OPEN").length ?? 0);
+
+  const iconButton = { size: 30, radius: 8, align: "center", justify: "center", color: c.muted, transition: 120 } as const;
+  const iconHover = { background: c.hover, color: c.text };
 </script>
 
-{#snippet section(label: string)}
-  <Text style={{ fontSize: 11, color: c.faint, uppercase: true, paddingTop: 6 }}>{label}</Text>
-{/snippet}
-
-{#snippet linkedRow(kind: "blockedBy" | "blocking" | "parent" | "sub", other: Linked)}
-  <View style={{ direction: "row", align: "center", gap: 8, paddingY: 3 }}>
-    <View style={{ width: 7, height: 7, radius: 4, background: other.state === "OPEN" ? c.ok : "#a371f7" }} />
-    <View
-      style={{ flex: 1, minWidth: 0 }}
-      onpress={() => app.select({ kind: "issue", node: other.node })}
-    >
-      <Text style={{ fontSize: 12, truncate: true }}>
-        <Text style={{ color: c.faint }}>{other.repoName ?? ""}#{other.number ?? "?"}</Text>
-        {other.title}
-      </Text>
-    </View>
-    <Button style={{ ...ghost, paddingX: 5 }} hover={ghostHover} onpress={() => void unlink(kind, other)}>
-      <Text>×</Text>
-    </Button>
+{#snippet property(icon: string, label: string)}
+  <View style={{ direction: "row", align: "center", gap: 8, width: 112, shrink: 0, height: 28 }}>
+    <Icon svg={icon} size={15} color={c.faint} />
+    <Text style={{ fontSize: 13, color: c.muted }}>{label}</Text>
   </View>
 {/snippet}
 
-<View style={{ width: 460, borderLeftWidth: 1, borderColor: c.border, background: c.surface }}>
+{#snippet empty(text: string)}
+  <Text style={{ fontSize: 13, color: c.faint }}>{text}</Text>
+{/snippet}
+
+{#snippet dot(color: string)}
+  <View style={{ width: 8, height: 8, radius: 4, background: color, shrink: 0 }} />
+{/snippet}
+
+{#snippet linkedRow(kind: "blockedBy" | "blocking" | "parent" | "sub", other: Linked)}
+  <View
+    style={{ direction: "row", align: "center", gap: 9, paddingX: 8, height: 32, radius: 8, transition: 100 }}
+    hover={{ background: c.hover }}
+  >
+    {@render dot(other.state === "OPEN" ? tones.GREEN : tones.PURPLE)}
+    <View style={{ flex: 1, minWidth: 0, direction: "row", gap: 6 }} onpress={() => app.select({ kind: "issue", node: other.node })}>
+      <Text style={{ fontSize: 12, color: c.faint, nowrap: true, fontFamily: "mono" }}>#{other.number ?? "?"}</Text>
+      <Text style={{ fontSize: 13, truncate: true, flex: 1 }}>{other.title}</Text>
+    </View>
+    <Tooltip text="Remove" placement="left">
+      <Button style={{ ...iconButton, size: 24 }} hover={iconHover} onpress={() => void unlink(kind, other)}>
+        <Icon svg={close} size={12} />
+      </Button>
+    </Tooltip>
+  </View>
+{/snippet}
+
+{#snippet group(label: string, color: string, list: Linked[], kind: "blockedBy" | "blocking" | "parent" | "sub")}
+  {#if list.length > 0}
+    <View style={{ gap: 2 }}>
+      <Text style={{ fontSize: 12, color, paddingX: 8, paddingTop: 4 }}>{label}</Text>
+      {#each list as other (other.node)}{@render linkedRow(kind, other)}{/each}
+    </View>
+  {/if}
+{/snippet}
+
+<View
+  style={{
+    width: 440,
+    radius: radii.panel,
+    borderWidth: 1,
+    borderColor: c.borderSoft,
+    background: c.surface,
+    overflow: "hidden",
+  }}
+>
   {#if issue}
-    <View style={{ direction: "row", align: "center", gap: 8, paddingX: 14, height: 44, shrink: 0 }}>
-      <View style={{ paddingX: 8, height: 20, radius: 10, justify: "center", background: issue.state === "OPEN" ? "#3fb95033" : "#a371f733" }}>
-        <Text style={{ fontSize: 11, nowrap: true, color: issue.state === "OPEN" ? c.ok : "#a371f7" }}>
-          {issue.state === "OPEN" ? "Open" : issue.stateReason === "NOT_PLANNED" ? "Not planned" : "Closed"}
-        </Text>
+    <View style={{ direction: "row", align: "center", gap: 8, paddingLeft: 16, paddingRight: 8, height: 48, shrink: 0 }}>
+      <View
+        style={{
+          direction: "row",
+          align: "center",
+          gap: 6,
+          paddingX: 9,
+          height: 24,
+          radius: 12,
+          borderWidth: 1,
+          borderColor: c.border,
+        }}
+      >
+        {@render dot(stateColor)}
+        <Text style={{ fontSize: 12, color: c.text }}>{stateLabel}</Text>
       </View>
-      <Text style={{ fontSize: 12, color: c.muted }}>{issue.repoName}#{issue.number ?? "new"}</Text>
-      {#if issue.pending}<Text style={{ fontSize: 11, color: c.warn }}>· syncing</Text>{/if}
+      <Text style={{ fontSize: 12, color: c.faint, fontFamily: "mono" }}>{issue.repoName}#{issue.number ?? "new"}</Text>
+      {#if issue.pending}
+        <View style={{ direction: "row", align: "center", gap: 5 }}>
+          <View style={{ width: 6, height: 6, radius: 3, background: c.warn }} />
+          <Text style={{ fontSize: 11, color: c.warn }}>Syncing</Text>
+        </View>
+      {/if}
       <View style={{ flex: 1 }} />
       {#if issue.url}
-        <Button style={ghost} hover={ghostHover} onpress={() => void app.api.open(issue!.url!)}>
-          <Text>GitHub ↗</Text>
-        </Button>
+        <Tooltip text="Open on GitHub" placement="bottom">
+          <Button style={iconButton} hover={iconHover} onpress={() => void app.api.open(issue!.url!)}>
+            <Icon svg={arrowUpRight} size={16} />
+          </Button>
+        </Tooltip>
       {/if}
-      <Button style={ghost} hover={ghostHover} onpress={() => app.select(null)}>
-        <Text>✕</Text>
-      </Button>
+      <Tooltip text="Close  Esc" placement="bottom">
+        <Button style={iconButton} hover={iconHover} onpress={() => app.select(null)}>
+          <Icon svg={close} size={16} />
+        </Button>
+      </Tooltip>
     </View>
+
     <Scroll style={{ flex: 1 }}>
-      <View style={{ padding: [4, 14, 20, 14], gap: 8 }}>
-        <Input
-          bind:value={title}
-          multiline
-          rows={1}
-          style={{ ...field, fontSize: 16, fontWeight: "semibold", background: "transparent", borderColor: "transparent", paddingX: 2 }}
-          focus={{ borderColor: c.accent, background: c.bg }}
-          oncommit={() => title.trim() && title !== issue?.title && void set("title", title.trim())}
-        />
+      <View style={{ paddingX: 12, paddingBottom: 24, gap: 18 }}>
+        <View style={{ gap: 6 }}>
+          <Input
+            bind:value={title}
+            multiline
+            rows={1}
+            style={{ fontSize: 21, lineHeight: 28, color: c.text, paddingX: 6, paddingY: 4, radius: 8, background: "transparent", borderWidth: 1, borderColor: "transparent" }}
+            hover={{ background: c.raised }}
+            focus={{ background: c.bg, borderColor: c.accent }}
+            oncommit={() => title.trim() && title !== issue?.title && void set("title", title.trim())}
+          />
+          <Text style={{ fontSize: 12, color: c.faint, paddingX: 7 }}>
+            {issue.author ? `@${issue.author} opened this ${ago(issue.created)}` : `Opened ${ago(issue.created)}`}
+          </Text>
+        </View>
 
         {#each issue.conflicts as conflict (conflict.field)}
-          <View style={{ padding: 10, gap: 6, radius: 8, borderWidth: 1, borderColor: c.danger, background: "#f2555a14" }}>
-            <Text style={{ fontSize: 12, fontWeight: "semibold" }}>Changed here and on GitHub: {conflict.field}</Text>
+          <View style={{ padding: 12, gap: 8, radius: radii.card, borderWidth: 1, borderColor: c.danger, background: c.dangerSoft }}>
+            <Text style={{ fontSize: 13, fontWeight: "medium" }}>Changed here and on GitHub: {conflict.field}</Text>
             <Text style={{ fontSize: 12, color: c.muted }}>Yours: {shown(conflict.local)}</Text>
             <Text style={{ fontSize: 12, color: c.muted }}>GitHub's: {shown(conflict.remote)}</Text>
             <View style={{ direction: "row", gap: 6 }}>
@@ -203,37 +313,54 @@
           </View>
         {/each}
 
-        <View style={{ gap: 6, padding: 10, radius: 8, background: c.bg }}>
+        <View style={{ gap: 2, paddingX: 6 }}>
           {#if statusDef}
-            <View style={{ direction: "row", align: "center", gap: 8 }}>
-              <Text style={{ width: 84, fontSize: 12, color: c.muted }}>Status</Text>
-              <Select
-                value={statusDef.value?.optionId ?? null}
-                options={[{ value: null, label: "No status" }, ...statusDef.options.map((o) => ({ value: o.id, label: o.name }))]}
-                style={{ ...field, flex: 1, paddingY: 4 }}
-                onchange={(v) => {
-                  if (v === null) void set(`field:${statusDef.id}`, null);
-                  else void app.run(() => app.api.moveCard(node, v as string));
+            <View style={{ direction: "row", align: "center" }}>
+              {@render property(circleDashed, "Status")}
+              <Picker
+                options={statusDef.options.map((o) => ({ id: o.id, label: o.name, color: optionColor("Status", o) }))}
+                chosen={statusDef.value?.optionId ? [statusDef.value.optionId] : []}
+                noneLabel="No status"
+                onpick={(id) => {
+                  if (id === null) void set(`field:${statusDef.id}`, null);
+                  else void app.run(() => app.api.moveCard(node, id));
                 }}
-              />
+              >
+                {#if statusDef.value?.name}
+                  {@const option = statusDef.options.find((o) => o.id === statusDef.value?.optionId)}
+                  {@render dot(option ? optionColor("Status", option) : tones.GRAY)}
+                  <Text style={{ fontSize: 13 }}>{statusDef.value.name}</Text>
+                {:else}
+                  {@render empty("Set status")}
+                {/if}
+              </Picker>
             </View>
           {/if}
           {#each otherDefs as def (def.id)}
-            <View style={{ direction: "row", align: "center", gap: 8 }}>
-              <Text style={{ width: 84, fontSize: 12, color: c.muted }}>{def.name}</Text>
+            <View style={{ direction: "row", align: "center" }}>
+              {@render property(fieldIcon(def.name, def.kind), def.name)}
               {#if def.kind === "single_select"}
-                <Select
-                  value={def.value?.optionId ?? null}
-                  options={[{ value: null, label: "None" }, ...def.options.map((o) => ({ value: o.id, label: o.name }))]}
-                  style={{ ...field, flex: 1, paddingY: 4 }}
-                  onchange={(v) => setOption(def.id, v as string | null)}
-                />
+                <Picker
+                  options={def.options.map((o) => ({ id: o.id, label: o.name, color: optionColor(def.name, o) }))}
+                  chosen={def.value?.optionId ? [def.value.optionId] : []}
+                  noneLabel="None"
+                  onpick={(id) => setOption(def.id, id)}
+                >
+                  {#if def.value?.name}
+                    {@const option = def.options.find((o) => o.id === def.value?.optionId)}
+                    {@render dot(option ? optionColor(def.name, option) : tones.GRAY)}
+                    <Text style={{ fontSize: 13 }}>{def.value.name}</Text>
+                  {:else}
+                    {@render empty(`Set ${def.name.toLowerCase()}`)}
+                  {/if}
+                </Picker>
               {:else}
                 <Input
                   value={String(def.value?.value ?? "")}
-                  placeholder={def.kind === "date" ? "YYYY-MM-DD" : ""}
-                  style={{ ...field, flex: 1, paddingY: 4 }}
-                  focus={fieldFocus}
+                  placeholder={def.kind === "date" ? `Set ${def.name.toLowerCase()} · YYYY-MM-DD` : `Set ${def.name.toLowerCase()}`}
+                  style={{ flex: 1, fontSize: 13, color: c.text, paddingX: 8, height: 28, radius: 7, background: "transparent", borderWidth: 1, borderColor: "transparent" }}
+                  hover={{ background: c.hover }}
+                  focus={{ background: c.bg, borderColor: c.accent }}
                   oncommit={(text) => {
                     const v = text.trim();
                     void set(`field:${def.id}`, v ? { kind: def.kind, value: def.kind === "number" ? Number(v) : v } : null);
@@ -242,152 +369,216 @@
               {/if}
             </View>
           {/each}
-          <View style={{ direction: "row", align: "start", gap: 8 }}>
-            <Text style={{ width: 84, fontSize: 12, color: c.muted, paddingTop: 3 }}>Labels</Text>
-            <View style={{ flex: 1, direction: "row", wrap: true, gap: 4, align: "center" }}>
-              {#each issue.labelsFull as label (label.id)}
-                <View style={{ direction: "row", align: "center", gap: 4, paddingX: 7, height: 22, radius: 11, borderWidth: 1, borderColor: c.border }}>
-                  <View style={{ width: 7, height: 7, radius: 4, background: labelColor(label.color) }} />
-                  <Text style={{ fontSize: 11 }}>{label.name}</Text>
-                </View>
-              {/each}
-              <Popover side="bottom" align="start">
-                {#snippet trigger({ toggle })}
-                  <Button style={{ ...ghost, paddingX: 6, paddingY: 2 }} hover={ghostHover} onpress={toggle}><Text>+ label</Text></Button>
-                {/snippet}
-                {#snippet children()}
-                  <Scroll style={{ width: 240, maxHeight: 300, padding: 6, radius: 8, background: c.surface, borderWidth: 1, borderColor: c.border }}>
-                    {#each issue!.repoLabels as label (label.id)}
-                      {@const on = issue!.labelsFull.some((l) => l.id === label.id)}
-                      <View style={{ direction: "row", align: "center", gap: 8, paddingX: 8, paddingY: 5, radius: 4 }} hover={{ background: c.hover }} onpress={() => toggleLabel(label.id)}>
-                        <Text style={{ width: 12, fontSize: 11, color: c.accent }}>{on ? "✓" : ""}</Text>
-                        <View style={{ width: 8, height: 8, radius: 4, background: labelColor(label.color) }} />
+          <View style={{ direction: "row", align: "start" }}>
+            {@render property(tag, "Labels")}
+            <View style={{ flex: 1, direction: "row", wrap: true, gap: 4, align: "center", paddingTop: 2 }}>
+              <Picker
+                options={issue.repoLabels.map((l) => ({ id: l.id, label: l.name, color: labelColor(l.color) }))}
+                chosen={issue.labelsFull.map((l) => l.id)}
+                multiple
+                placeholder="Filter labels…"
+                onpick={(id) => id && toggleLabel(id)}
+              >
+                {#if issue.labelsFull.length === 0}
+                  {@render empty("Add label")}
+                {:else}
+                  <View style={{ direction: "row", wrap: true, gap: 4 }}>
+                    {#each issue.labelsFull as label (label.id)}
+                      <View style={{ direction: "row", align: "center", gap: 5, paddingX: 8, height: 22, radius: 11, borderWidth: 1, borderColor: c.border }}>
+                        {@render dot(labelColor(label.color))}
                         <Text style={{ fontSize: 12 }}>{label.name}</Text>
                       </View>
                     {/each}
-                  </Scroll>
-                {/snippet}
-              </Popover>
+                  </View>
+                {/if}
+              </Picker>
             </View>
           </View>
-          <View style={{ direction: "row", align: "start", gap: 8 }}>
-            <Text style={{ width: 84, fontSize: 12, color: c.muted, paddingTop: 3 }}>Assignees</Text>
-            <View style={{ flex: 1, direction: "row", wrap: true, gap: 4, align: "center" }}>
-              {#each issue.assigneesFull as user (user.id)}
-                <Text style={{ fontSize: 12, paddingX: 6 }}>@{user.login}</Text>
-              {/each}
-              <Popover side="bottom" align="start">
-                {#snippet trigger({ toggle })}
-                  <Button style={{ ...ghost, paddingX: 6, paddingY: 2 }} hover={ghostHover} onpress={toggle}><Text>+ assignee</Text></Button>
-                {/snippet}
-                {#snippet children()}
-                  <View style={{ width: 220, padding: 6, radius: 8, background: c.surface, borderWidth: 1, borderColor: c.border }}>
-                    {#each issue!.repoUsers as user (user.id)}
-                      {@const on = issue!.assigneesFull.some((u) => u.id === user.id)}
-                      <View style={{ direction: "row", gap: 8, paddingX: 8, paddingY: 5, radius: 4 }} hover={{ background: c.hover }} onpress={() => toggleAssignee(user.id)}>
-                        <Text style={{ width: 12, fontSize: 11, color: c.accent }}>{on ? "✓" : ""}</Text>
-                        <Text style={{ fontSize: 12 }}>@{user.login}</Text>
+          <View style={{ direction: "row", align: "start" }}>
+            {@render property(users, "Assignees")}
+            <View style={{ flex: 1, paddingTop: 2 }}>
+              <Picker
+                options={issue.repoUsers.map((u) => ({ id: u.id, label: `@${u.login}` }))}
+                chosen={issue.assigneesFull.map((u) => u.id)}
+                multiple
+                placeholder="Filter people…"
+                onpick={(id) => id && toggleAssignee(id)}
+              >
+                {#if issue.assigneesFull.length === 0}
+                  {@render empty("Add assignee")}
+                {:else}
+                  <View style={{ direction: "row", wrap: true, gap: 8 }}>
+                    {#each issue.assigneesFull as user (user.id)}
+                      <View style={{ direction: "row", align: "center", gap: 6 }}>
+                        <Avatar login={user.login} size={20} github={!issue.local} />
+                        <Text style={{ fontSize: 13 }}>{user.login}</Text>
                       </View>
                     {/each}
                   </View>
-                {/snippet}
-              </Popover>
+                {/if}
+              </Picker>
             </View>
-          </View>
-          <View style={{ direction: "row", gap: 6, paddingTop: 4 }}>
-            {#if issue.state === "OPEN"}
-              <Button style={button} hover={buttonHover} onpress={() => void set("state", { state: "CLOSED", reason: "COMPLETED" })}>
-                <Text>Close as done</Text>
-              </Button>
-              <Button style={button} hover={buttonHover} onpress={() => void set("state", { state: "CLOSED", reason: "NOT_PLANNED" })}>
-                <Text>Not planned</Text>
-              </Button>
-            {:else}
-              <Button style={button} hover={buttonHover} onpress={() => void set("state", { state: "OPEN", reason: null })}>
-                <Text>Reopen</Text>
-              </Button>
-            {/if}
           </View>
         </View>
 
-        {@render section("Description")}
-        <Input
-          bind:value={body}
-          multiline
-          rows={8}
-          placeholder="Add a description…"
-          style={{ ...field, lineHeight: 19 }}
-          focus={fieldFocus}
-          oncommit={() => body !== issue?.body && void set("body", body)}
-        />
-
-        {@render section("Relationships")}
-        {#if issue.parent}
-          <Text style={{ fontSize: 11, color: c.muted }}>Parent</Text>
-          {@render linkedRow("parent", issue.parent)}
-        {/if}
-        {#if issue.blockedByList.length > 0}
-          <Text style={{ fontSize: 11, color: c.danger }}>Blocked by</Text>
-          {#each issue.blockedByList as other (other.node)}{@render linkedRow("blockedBy", other)}{/each}
-        {/if}
-        {#if issue.blockingList.length > 0}
-          <Text style={{ fontSize: 11, color: c.muted }}>Blocking</Text>
-          {#each issue.blockingList as other (other.node)}{@render linkedRow("blocking", other)}{/each}
-        {/if}
-        {#if issue.subIssues.length > 0}
-          <Text style={{ fontSize: 11, color: c.muted }}>Sub-issues</Text>
-          {#each issue.subIssues as other (other.node)}{@render linkedRow("sub", other)}{/each}
-        {/if}
-        {#if linking}
-          <View style={{ gap: 6 }}>
+        <View style={{ gap: 6 }}>
+          <Text style={{ ...eyebrow, paddingX: 7 }}>Description</Text>
+          {#if describing || !body.trim()}
             <Input
-              bind:value={search}
-              placeholder="Search issues in every project: title or #number"
-              style={field}
-              focus={fieldFocus}
+              bind:this={bodyField}
+              bind:value={body}
+              multiline
+              rows={4}
+              placeholder="Add a description…  Markdown works"
+              style={{ fontFamily: describing ? "mono" : "sans", fontSize: describing ? 13 : 14, lineHeight: 22, color: c.text, paddingX: 6, paddingY: 6, radius: 8, background: "transparent", borderWidth: 1, borderColor: "transparent" }}
+              hover={{ background: c.raised }}
+              focus={{ background: c.bg, borderColor: c.accent }}
+              onfocus={() => (describing = true)}
+              oncommit={() => {
+                if (body !== issue?.body) void set("body", body);
+                describing = false;
+              }}
+              onkey={(e) => {
+                if (e.key !== "Escape") return;
+                e.preventDefault();
+                e.stopPropagation();
+                bodyField?.blur();
+                describing = false;
+              }}
             />
-            {#each found.slice(0, 8) as card (card.node)}
-              <View style={{ paddingX: 8, paddingY: 5, radius: 4 }} hover={{ background: c.hover }} onpress={() => void link(card)}>
-                <Text style={{ fontSize: 12, truncate: true }}>
-                  <Text style={{ color: c.faint }}>{card.repoName}#{card.number}</Text>
-                  {card.title}
-                </Text>
-              </View>
-            {/each}
-            <Button style={ghost} hover={ghostHover} onpress={() => (linking = null)}><Text>Cancel</Text></Button>
-          </View>
-        {:else}
-          <View style={{ direction: "row", gap: 4, wrap: true }}>
-            <Button style={ghost} hover={ghostHover} onpress={() => (linking = "blockedBy")}><Text>+ Blocked by</Text></Button>
-            <Button style={ghost} hover={ghostHover} onpress={() => (linking = "blocking")}><Text>+ Blocking</Text></Button>
-            <Button style={ghost} hover={ghostHover} onpress={() => (linking = "parent")}><Text>+ Parent</Text></Button>
-          </View>
-        {/if}
+          {:else}
+            <View style={{ paddingX: 7, paddingY: 4, radius: 8 }} hover={{ background: c.raised }}>
+              <Markdown source={body} size={14} onpress={() => (describing = true)} />
+            </View>
+          {/if}
+        </View>
 
-        {@render section(`Comments · ${issue.commentList.length}`)}
-        {#each issue.commentList as comment (comment.id)}
-          <View style={{ gap: 4, padding: 10, radius: 8, background: c.bg, opacity: comment.pending ? 0.7 : 1 }}>
-            <Text style={{ fontSize: 11, color: c.muted }}>
-              @{comment.author ?? "?"} · {comment.pending ? "sending…" : date(comment.created)}
-            </Text>
-            <Text style={{ fontSize: 13, lineHeight: 19 }}>{comment.body}</Text>
+        <View style={{ gap: 4 }}>
+          <View style={{ direction: "row", align: "center", paddingX: 7, height: 26 }}>
+            <Text style={{ ...eyebrow, flex: 1 }}>Relationships</Text>
+            {#if issue.subIssues.length > 0}
+              <Text style={{ fontSize: 12, color: c.faint, paddingRight: 6 }}>{subDone}/{issue.subIssues.length} sub-issues done</Text>
+            {/if}
+            <Popover side="bottom" align="end" style={{ width: 200, padding: 5, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}>
+              {#snippet trigger({ toggle })}
+                <Tooltip text="Add a relationship" placement="left">
+                  <Button style={{ ...iconButton, size: 26 }} hover={iconHover} onpress={toggle}>
+                    <Icon svg={plus} size={14} />
+                  </Button>
+                </Tooltip>
+              {/snippet}
+              {#snippet children({ close: done })}
+                {#each [["blockedBy", "Blocked by…"], ["blocking", "Blocking…"], ["parent", "Parent…"]] as const as [kind, label] (kind)}
+                  <Button
+                    style={{ paddingX: 9, height: 30, radius: 7, transition: 100 }}
+                    hover={{ background: c.hover }}
+                    onpress={() => {
+                      linking = kind;
+                      done("select");
+                    }}
+                  >
+                    <Text style={{ fontSize: 13 }}>{label}</Text>
+                  </Button>
+                {/each}
+              {/snippet}
+            </Popover>
           </View>
-        {/each}
-        <Input bind:value={reply} multiline rows={3} placeholder="Write a comment…" style={field} focus={fieldFocus} />
-        <Button
-          style={{ ...button, alignSelf: "end", background: c.accent, borderColor: c.accent }}
-          hover={{ background: "#8d9bff" }}
-          disabled={!reply.trim()}
-          disabledStyle={{ opacity: 0.4 }}
-          onpress={() => void send()}
-        >
-          <Text style={{ color: "#fff" }}>Send</Text>
-        </Button>
+          {#if issue.parent}{@render group("Parent", c.muted, [issue.parent], "parent")}{/if}
+          {@render group("Blocked by", c.danger, issue.blockedByList, "blockedBy")}
+          {@render group("Blocking", c.muted, issue.blockingList, "blocking")}
+          {@render group("Sub-issues", c.muted, issue.subIssues, "sub")}
+          {#if linking}
+            <View style={{ gap: 4, padding: 6, radius: radii.card, background: c.raised }}>
+              <Input
+                bind:this={searchField}
+                bind:value={search}
+                placeholder={linking === "blockedBy" ? "Blocked by… title or #number" : linking === "blocking" ? "Blocking… title or #number" : "Parent… title or #number"}
+                style={{ paddingX: 9, height: 32, fontSize: 13, color: c.text, radius: 7, background: c.bg, borderWidth: 1, borderColor: c.accent }}
+                onkey={(e) => {
+                  if (e.key === "Escape") linking = null;
+                }}
+                onsubmit={() => {
+                  if (found[0]) void link(found[0]);
+                }}
+              />
+              {#each found.slice(0, 8) as card (card.node)}
+                <Button style={{ direction: "row", gap: 6, paddingX: 9, height: 30, radius: 7 }} hover={{ background: c.hover }} onpress={() => void link(card)}>
+                  <Text style={{ fontSize: 12, color: c.faint, fontFamily: "mono" }}>#{card.number}</Text>
+                  <Text style={{ fontSize: 13, flex: 1, truncate: true }}>{card.title}</Text>
+                  <Text style={{ fontSize: 11, color: c.faint }}>{card.repoName}</Text>
+                </Button>
+              {/each}
+            </View>
+          {:else if !issue.parent && issue.blockedByList.length + issue.blockingList.length + issue.subIssues.length === 0}
+            <Text style={{ fontSize: 13, color: c.faint, paddingX: 7 }}>Nothing blocks this or depends on it.</Text>
+          {/if}
+        </View>
+
+        <View style={{ gap: 10 }}>
+          <Text style={{ ...eyebrow, paddingX: 7 }}>Activity · {issue.commentList.length}</Text>
+          {#each issue.commentList as comment (comment.id)}
+            <View style={{ direction: "row", gap: 10, paddingX: 6, opacity: comment.pending ? 0.6 : 1 }}>
+              <Avatar login={comment.author} size={28} github={!issue.local} />
+              <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                <View style={{ direction: "row", gap: 6, align: "center" }}>
+                  <Text style={{ fontSize: 13, fontWeight: "medium" }}>{comment.author ?? "?"}</Text>
+                  <Text style={{ fontSize: 12, color: c.faint }}>{comment.pending ? "sending…" : ago(comment.created)}</Text>
+                </View>
+                <Markdown source={comment.body} size={14} />
+              </View>
+            </View>
+          {/each}
+        </View>
+
+        <View style={{ direction: "row", gap: 6, paddingX: 6 }}>
+          {#if open}
+            <Button style={button} hover={buttonHover} onpress={() => void set("state", { state: "CLOSED", reason: "COMPLETED" })}>
+              <Icon svg={checkCircle} size={15} color={tones.PURPLE} />
+              <Text>Close as done</Text>
+            </Button>
+            <Button style={button} hover={buttonHover} onpress={() => void set("state", { state: "CLOSED", reason: "NOT_PLANNED" })}>
+              <Icon svg={notPlanned} size={15} color={c.muted} />
+              <Text>Not planned</Text>
+            </Button>
+          {:else}
+            <Button style={button} hover={buttonHover} onpress={() => void set("state", { state: "OPEN", reason: null })}>
+              <Icon svg={reopen} size={15} color={tones.GREEN} />
+              <Text>Reopen</Text>
+            </Button>
+          {/if}
+        </View>
       </View>
     </Scroll>
+
+    <View style={{ padding: 10, borderTopWidth: 1, borderColor: c.border, shrink: 0 }}>
+      <View
+        style={{ direction: "row", align: "end", gap: 6, padding: 4, paddingLeft: 10, radius: radii.card, background: c.raised, borderWidth: 1, borderColor: c.border }}
+      >
+        <Input
+          bind:value={reply}
+          multiline
+          rows={1}
+          placeholder="Leave a comment…  Ctrl+Enter sends"
+          style={{ flex: 1, fontSize: 14, lineHeight: 20, color: c.text, paddingY: 5, background: "transparent" }}
+          onkey={(e) => {
+            if (e.key !== "Enter" || !(e.ctrl || e.meta)) return;
+            // The field would otherwise take the Enter after the text is cleared.
+            e.preventDefault();
+            void sendReply();
+          }}
+        />
+        <Button
+          style={{ size: 30, radius: 9, align: "center", justify: "center", background: reply.trim() ? c.fill : "transparent", color: reply.trim() ? c.onFill : c.faint, transition: 140 }}
+          hover={{ background: reply.trim() ? c.fillHover : c.hover }}
+          onpress={() => void sendReply()}
+        >
+          <Icon svg={send} size={15} />
+        </Button>
+      </View>
+    </View>
   {:else}
     <View style={{ flex: 1, align: "center", justify: "center" }}>
-      <Text style={{ color: c.muted }}>Loading…</Text>
+      <Text style={{ color: c.faint }}>Loading…</Text>
     </View>
   {/if}
 </View>

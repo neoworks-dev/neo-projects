@@ -1,10 +1,11 @@
 <script lang="ts">
   // A local board: notes grouped by a front matter field (`status`). Dragging a note to another
   // column writes the field into the note; "+" makes a new note in that column.
-  import { Button, Draggable, DropTarget, Input, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { Icon, Button, Draggable, DropTarget, Input, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
+  import { icons } from "../../lib/icons.ts";
   import { app } from "../../lib/state.svelte.ts";
-  import { c } from "../../lib/theme.ts";
+  import { c, ring } from "../../lib/theme.ts";
 
   type LocalBoardItem = Extract<Item, { kind: "localboard" }>;
   let { item, zoom, selected }: { item: LocalBoardItem; zoom: number; selected: boolean } = $props();
@@ -42,7 +43,8 @@
     flex: 1,
     radius: s(12),
     background: c.surface,
-    borderWidth: selected ? 2 : 1,
+    borderWidth: 1,
+    shadow: selected ? ring : null,
     borderColor: selected ? c.accent : c.border,
     overflow: "hidden",
   }}
@@ -66,11 +68,11 @@
           <Text style={{ fontSize: s(11), color: c.faint }}>{column.notes.length}</Text>
           <View style={{ flex: 1 }} />
           <Button
-            style={{ paddingX: s(5), radius: s(4), color: c.muted, fontSize: s(14) }}
+            style={{ size: s(24), radius: s(6), align: "center", justify: "center", color: c.muted, transition: 120 }}
             hover={{ background: c.hover, color: c.text }}
             onpress={() => (adding = column.value ?? "")}
           >
-            <Text>+</Text>
+            <Icon svg={icons.add} size={s(14)} />
           </Button>
         </View>
         {#if adding === (column.value ?? "")}

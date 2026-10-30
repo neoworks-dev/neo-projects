@@ -1,6 +1,7 @@
 # Neoworks Projects
 
-A visual way to organise your projects around GitHub. Every project is a repository; the app
+A visual way to organise your projects, locally or around GitHub. A project is a GitHub
+repository, or a local one whose issues are Markdown files in its folder; the app
 opens on one canvas of all of them, with the blocks between repositories as arrows. Open a
 project and its board is a region of its own canvas: drag an issue out of a column to give it a
 place next to your notes, images and links, and draw arrows between anything. Everything syncs
@@ -17,10 +18,13 @@ they live, never copied. GitHub stays the place for issues; the app keeps a cach
 - **Project canvas:** the repository's board, laid out by the organization's `Status` issue field
   (Open and Closed without one). Drag cards between columns to change their status, out onto the
   canvas to place them, back onto the board to return them. "+" in a column creates an issue.
-- **Notes, files, links:** double-click the canvas for a note, drop files from your file manager,
+- **Sticky notes:** S or the toolbar; Markdown written right on the canvas, kept in the `.canvas` file.
+- **Notes, files, links:** N or the toolbar for a note, drop files from your file manager,
   add web links. Notes boards group notes by a front matter field.
 - **Relationships:** drag the handle of a selected node onto another. Between two issues that is
   a GitHub blocked-by or sub-issue; anything else is kept in `.neoworks-projects/relations.jsonl`.
+- **Local projects:** no repository; each issue is `Issues/<n>.md` with its fields in the front
+  matter, on the same board and in the same panel as GitHub's.
 - **Issue panel:** title, description, Status, Priority, Effort and other issue fields, labels,
   assignees, close and reopen, blocked by and blocking, parent and sub-issues, comments.
 - **Sync:** local edits show at once and wait in an outbox until GitHub has them; offline is fine.
