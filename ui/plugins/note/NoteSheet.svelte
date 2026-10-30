@@ -1,10 +1,12 @@
 <script lang="ts">
   // A note, as a sheet that rises over the canvas: the canvas stays in sight above it, dimmed, and
   // "Full screen" lifts the sheet to cover it. A wide, quiet page for writing: the title (the
-  // file's name) and the Markdown body, saved as you type. The file is plain Markdown; "Open"
+  // file's name) and the Markdown body, saved as you type. The body is written in svelte-gpui's
+  // editor, which highlights the Markdown as it is typed. The file is plain Markdown; "Open"
   // hands it to your editor.
   import { Button, Icon, Input, Presence, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
   import { Tooltip } from "@neoworks/svelte-gpui-ui";
+  import { Editor, gpuiDocumentHost, proseTheme, type EditorTheme } from "@neoworks/svelte-gpui-editor";
   import { cubicOut } from "svelte/easing";
   import { fade, fly } from "svelte/transition";
   import type { Note } from "../../lib/api.ts";
@@ -24,7 +26,23 @@
   let full = $state(false);
   let dirty = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let editor = $state<Input>();
+  let editor = $state<{ focus(): void }>();
+
+  /** The editor's documents, and the one that holds the body of the note at `documentPath`. */
+  const documents = gpuiDocumentHost();
+  let documentId = $state<number | null>(null);
+  let documentPath = "";
+
+  /** The body as Markdown the way a notes app shows it, on the sheet's own surface. */
+  const bodyTheme: Partial<EditorTheme> = {
+    ...proseTheme({ text: c.text, heading: c.text, muted: c.faint, link: c.accentText, code: c.pine }),
+    background: c.surface,
+    currentLine: c.surface,
+    selection: c.accentSoft,
+    cursor: c.text,
+    indentGuide: "#00000000",
+    indentGuideActive: "#00000000",
+  };
 
   $effect(() => {
     void app.version;
@@ -35,7 +53,44 @@
       note = next;
       title = next.title;
       body = next.body;
+      await showInEditor(p, next.body);
     });
+  });
+
+  /**
+   * Puts a note's body in the editor. Another note gets a document of its own, so undo never
+   * reaches into the note before; the same note read again keeps its document and history.
+   */
+  async function showInEditor(notePath: string, text: string) {
+    if (documentId !== null && notePath === documentPath) {
+      await documents.setText(documentId, text);
+      return;
+    }
+    if (documentId !== null) {
+      void documents.close(documentId);
+    }
+    documentPath = notePath;
+    const opened = await documents.openText("note.md", text);
+    documentId = opened.id;
+  }
+
+  /** Takes what was typed in the editor into the body, which saves it. */
+  async function pull() {
+    if (documentId === null) return;
+    const text = await documents.text(documentId);
+    if (text === body) return;
+    body = text;
+    typed();
+  }
+
+  $effect(() =>
+    documents.onEvent((event) => {
+      if (event.type === "edited" && event.id === documentId) void pull();
+    }),
+  );
+
+  $effect(() => () => {
+    if (documentId !== null) void documents.close(documentId);
   });
 
   /** Writing the Markdown, or reading it rendered. An empty note opens for writing. */
@@ -90,6 +145,31 @@
   const iconButton = { size: 32, radius: 8, align: "center", justify: "center", color: c.muted, transition: 120 } as const;
   const iconHover = { background: c.hover, color: c.text };
 </script>
+
+<!-- The title, the word count and the properties, over the body whether it is written or read. -->
+{#snippet heading()}
+  <Input
+    bind:value={title}
+    placeholder="Untitled"
+    style={{
+      fontSize: 34,
+      lineHeight: 40,
+      color: c.text,
+      background: "transparent",
+      padding: 0,
+    }}
+    onsubmit={() => {
+      void rename();
+      editor?.focus();
+    }}
+    oncommit={() => void rename()}
+  />
+  <Text style={{ fontSize: 12, color: c.faint }}>{words} {words === 1 ? "word" : "words"} · Markdown</Text>
+  {#if note}
+    <Properties {note} onchange={(next) => (note = next)} />
+  {/if}
+  <View style={{ height: 1, background: c.border }} />
+{/snippet}
 
 <Presence
   in={[fade, { duration: 200 }]}
@@ -169,54 +249,40 @@
         </Button>
       </Tooltip>
     </View>
-    <Scroll style={{ flex: 1 }}>
-      <View style={{ align: "center", paddingX: 32 }}>
-        <View style={{ width: "full", maxWidth: 720, paddingTop: 28, paddingBottom: 120, gap: 18 }}>
-          <Input
-            bind:value={title}
-            placeholder="Untitled"
-            style={{
-              fontSize: 34,
-              lineHeight: 40,
-              color: c.text,
-              background: "transparent",
-              padding: 0,
+    {#if editing}
+      <!-- The editor scrolls its own text, so while writing it fills the sheet below the heading. -->
+      <View style={{ flex: 1, align: "center", paddingX: 32 }}>
+        <View style={{ width: "full", maxWidth: 720, flex: 1, paddingTop: 28, gap: 18 }}>
+          {@render heading()}
+          <Editor
+            bind:this={editor}
+            key="note-body"
+            document={documentId}
+            theme={bodyTheme}
+            wrap
+            lineNumbers={false}
+            style={{ flex: 1 }}
+            onblur={() => void save()}
+            onkey={(e) => {
+              if (e.key === "Escape" || (e.key === "e" && (e.ctrl || e.meta))) {
+                e.preventDefault();
+                e.stopPropagation();
+                void save();
+                editing = false;
+              }
             }}
-            onsubmit={() => {
-              void rename();
-              editor?.focus();
-            }}
-            oncommit={() => void rename()}
           />
-          <Text style={{ fontSize: 12, color: c.faint }}>{words} {words === 1 ? "word" : "words"} · Markdown</Text>
-          {#if note}
-            <Properties {note} onchange={(next) => (note = next)} />
-          {/if}
-          <View style={{ height: 1, background: c.border }} />
-          {#if editing}
-            <Input
-              bind:this={editor}
-              bind:value={body}
-              multiline
-              rows={18}
-              placeholder="Start writing…"
-              style={{ fontFamily: "mono", fontSize: 14, lineHeight: 24, color: c.text, background: "transparent", padding: 0 }}
-              oninput={typed}
-              oncommit={() => void save()}
-              onkey={(e) => {
-                if (e.key === "Escape" || (e.key === "e" && (e.ctrl || e.meta))) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void save();
-                  editing = false;
-                }
-              }}
-            />
-          {:else}
-            <Markdown source={body} size={16} base={folder} onpress={() => (editing = true)} />
-          {/if}
         </View>
       </View>
-    </Scroll>
+    {:else}
+      <Scroll style={{ flex: 1 }}>
+        <View style={{ align: "center", paddingX: 32 }}>
+          <View style={{ width: "full", maxWidth: 720, paddingTop: 28, paddingBottom: 120, gap: 18 }}>
+            {@render heading()}
+            <Markdown source={body} size={16} base={folder} onpress={() => (editing = true)} />
+          </View>
+        </View>
+      </Scroll>
+    {/if}
   </View>
 </Presence>
