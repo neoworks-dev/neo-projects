@@ -115,6 +115,55 @@ export function midpoint(points: Point[]): Point {
   return points[points.length - 1];
 }
 
+/** A resize handle of a selected node: a side or a corner, by compass point. */
+export type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+export const handles: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+/** Where `handle` sits on `r`, as a point on its border. */
+export function handlePoint(r: Rect, handle: Handle): Point {
+  let x = r.x + r.w / 2;
+  if (handle.includes("w")) x = r.x;
+  if (handle.includes("e")) x = r.x + r.w;
+  let y = r.y + r.h / 2;
+  if (handle.includes("n")) y = r.y;
+  if (handle.includes("s")) y = r.y + r.h;
+  return { x, y };
+}
+
+/**
+ * `start` after dragging its `handle` by `dx`, `dy`: the opposite side or corner stays where it
+ * was, and the size stays at least `min`. With `keepAspect` (Shift held) the proportions of
+ * `start` are kept, the larger of the two changes deciding the size.
+ */
+export function resized(start: Rect, handle: Handle, dx: number, dy: number, min: { w: number; h: number }, keepAspect: boolean): Rect {
+  let w = start.w;
+  if (handle.includes("e")) w = start.w + dx;
+  if (handle.includes("w")) w = start.w - dx;
+  let h = start.h;
+  if (handle.includes("s")) h = start.h + dy;
+  if (handle.includes("n")) h = start.h - dy;
+
+  if (keepAspect) {
+    const sideways = handle === "e" || handle === "w";
+    const upright = handle === "n" || handle === "s";
+    let scale = Math.max(w / start.w, h / start.h);
+    if (sideways) scale = w / start.w;
+    if (upright) scale = h / start.h;
+    scale = Math.max(scale, min.w / start.w, min.h / start.h);
+    w = start.w * scale;
+    h = start.h * scale;
+  }
+  w = Math.round(Math.max(min.w, w));
+  h = Math.round(Math.max(min.h, h));
+
+  let x = start.x;
+  if (handle.includes("w")) x = start.x + start.w - w;
+  let y = start.y;
+  if (handle.includes("n")) y = start.y + start.h - h;
+  return { x, y, w, h };
+}
+
 /** A free spot for a new node of size w×h near `at`, stepping right then down past `taken`. */
 export function freeSpot(taken: Rect[], at: Point, w: number, h: number, gap = 24): Point {
   let candidate = { x: at.x, y: at.y, w, h };
