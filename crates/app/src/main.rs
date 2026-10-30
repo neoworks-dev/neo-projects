@@ -8,6 +8,7 @@
 
 mod canvas;
 mod commands;
+mod math;
 mod state;
 mod sync;
 
@@ -32,6 +33,13 @@ fn main() {
     // The note sheet writes Markdown in svelte-gpui's editor, whose documents live here.
     let documents = SharedDocuments::new(commands.emitter());
     let commands = documents.register(commands::all(commands, app));
+    let math = math::Math::start(options.bundle.with_file_name("mathjax.js"));
+    let commands = commands.command("math", move |args| {
+        let tex = args["tex"].as_str().ok_or("math needs the tex")?;
+        let display = args["display"].as_bool().unwrap_or(false);
+        let formula = math.typeset(tex, display)?;
+        serde_json::to_value(formula).map_err(|e| e.to_string())
+    });
     let signals = Signals::default();
     let elements = Elements::new().register("editor", move |host, cx| {
         let documents = documents.clone();

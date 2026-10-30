@@ -182,6 +182,15 @@ export interface IssueDetail extends Card {
   statusField: string | null;
 }
 
+/** A typeset formula. Sizes are in ems of the text around it. */
+export interface Formula {
+  svg: string;
+  width: number;
+  height: number;
+  /** How far it reaches below the baseline. */
+  depth: number;
+}
+
 export interface Note {
   path: string;
   uri: string;
@@ -252,6 +261,8 @@ export const api = {
   /** Sets one front matter key; null removes it. */
   setNoteProp: (path: string, key: string, value: unknown) => invoke<Note>("note_prop", { path, key, value }),
   renameNoteProp: (path: string, from: string, to: string) => invoke<Note>("note_prop_rename", { path, from, to }),
+  /** A LaTeX formula typeset as SVG; rejects with TeX's message when it doesn't parse. */
+  math: (tex: string, display: boolean) => invoke<Formula>("math", { tex, display }),
   /** Copies a file into the note's folder; answers with the name the note links it by. */
   attachToNote: (path: string, file: string) => invoke<string>("note_attach", { path, file }),
   linkFiles: (paths: string[]) => invoke<CanvasNode[]>("files_link", { paths }),

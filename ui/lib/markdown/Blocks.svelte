@@ -25,8 +25,9 @@
   import Blocks from "./Blocks.svelte";
   import Code from "./Code.svelte";
   import Inline from "./Inline.svelte";
+  import Formula from "./Formula.svelte";
   import Picture from "./Picture.svelte";
-  import { images, links, onlyImages } from "./parse.ts";
+  import { images, links, onlyImages, type MathToken } from "./parse.ts";
   import { icons } from "../icons.ts";
   const { taskDone: checkSquare, taskOpen: square } = icons;
 
@@ -65,7 +66,7 @@
         marginTop: i === 0 ? 0 : ctx.size * (h.depth <= 2 ? 0.9 : 0.5),
       }}
     >
-      <Inline tokens={h.tokens} />
+      <Inline tokens={h.tokens} size={ctx.size * headingScale[h.depth]} />
     </Text>
     {#if h.depth === 1}<View style={{ height: 1, background: c.border, marginTop: 2 }} />{/if}
   {:else if token.type === "paragraph"}
@@ -76,16 +77,16 @@
     {#if !gallery}
       {#if ctx.interactive}
         <View onpress={() => press(p.tokens)}>
-          <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} /></Text>
+          <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} size={ctx.size} /></Text>
         </View>
       {:else}
-        <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} /></Text>
+        <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} size={ctx.size} /></Text>
       {/if}
     {/if}
     {@render pictureRow(pictures)}
   {:else if token.type === "text"}
     {@const t = token as Tokens.Text}
-    <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={t.tokens ?? [t]} /></Text>
+    <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={t.tokens ?? [t]} size={ctx.size} /></Text>
     {@render pictureRow(images(t.tokens ?? []))}
   {:else if token.type === "list"}
     {@const list = token as Tokens.List}
@@ -133,16 +134,24 @@
       <View style={{ radius: radii.control, borderWidth: 1, borderColor: c.border, overflow: "hidden" }}>
         <View style={{ direction: "row", background: c.raised }}>
           {#each table.header as cell, k (k)}
-            <Text style={{ width: 160, padding: [7, 10], fontSize: ctx.size * 0.9, fontWeight: "semibold", color: c.text, textAlign: table.align[k] ?? "left" }}><Inline tokens={cell.tokens} /></Text>
+            <Text style={{ width: 160, padding: [7, 10], fontSize: ctx.size * 0.9, fontWeight: "semibold", color: c.text, textAlign: table.align[k] ?? "left" }}><Inline tokens={cell.tokens} size={ctx.size * 0.9} /></Text>
           {/each}
         </View>
         {#each table.rows as row, r (r)}
           <View style={{ direction: "row", borderTopWidth: 1, borderColor: c.border }}>
             {#each row as cell, k (k)}
-              <Text style={{ width: 160, padding: [7, 10], fontSize: ctx.size * 0.9, color: c.text, textAlign: table.align[k] ?? "left" }}><Inline tokens={cell.tokens} /></Text>
+              <Text style={{ width: 160, padding: [7, 10], fontSize: ctx.size * 0.9, color: c.text, textAlign: table.align[k] ?? "left" }}><Inline tokens={cell.tokens} size={ctx.size * 0.9} /></Text>
             {/each}
           </View>
         {/each}
+      </View>
+    </Scroll>
+  {:else if token.type === "math"}
+    {@const math = token as unknown as MathToken}
+    <!-- A wide formula scrolls on its own rather than widen the page. -->
+    <Scroll horizontal style={{ maxWidth: "full" }}>
+      <View style={{ align: "center", minWidth: "full", paddingY: ctx.size * 0.25 }}>
+        <Formula tex={math.text} display size={ctx.size * 1.1} />
       </View>
     </Scroll>
   {:else if token.type === "hr"}
