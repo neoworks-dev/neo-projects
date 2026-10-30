@@ -9,6 +9,7 @@
   import { fade, fly } from "svelte/transition";
   import type { Note } from "../../lib/api.ts";
   import Markdown from "../../lib/markdown/Markdown.svelte";
+  import Properties from "./Properties.svelte";
   import { app } from "../../lib/state.svelte.ts";
   import { c, radii, shadow } from "../../lib/theme.ts";
   import { icons } from "../../lib/icons.ts";
@@ -188,6 +189,9 @@
             oncommit={() => void rename()}
           />
           <Text style={{ fontSize: 12, color: c.faint }}>{words} {words === 1 ? "word" : "words"} · Markdown</Text>
+          {#if note}
+            <Properties {note} onchange={(next) => (note = next)} />
+          {/if}
           <View style={{ height: 1, background: c.border }} />
           {#if editing}
             <Input
