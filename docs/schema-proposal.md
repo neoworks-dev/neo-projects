@@ -236,6 +236,8 @@ fields (personal repos) get the Open/Closed board. New cards on a board create r
 Built: `crates/core` (cache.db + pull/push), tried live on neoworks-dev/neo-projects on
 2026-10-30. A blocked-by change moves the issue's `updatedAt`, so the incremental pull sees it.
 The org has no Status field yet; `gh bot` can't create issue fields (no org permission).
+v1 built 2026-10-30: overview, project canvases with the board, notes, linked files, links, notes
+boards, relationships, the issue panel and two-way sync, all tried live on neo-projects.
 
 ## v1 scope
 
