@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use np_core::views;
-use np_core::workspace::{self, Canvas, Node, Project, Uri, Workspace, read_canvas, read_note, write_canvas};
+use np_core::workspace::{self, Canvas, Node, Project, Uri, Workspace, issues, read_canvas, read_note, write_canvas};
 use np_core::{Cache, Error, Result};
 use rusqlite::OptionalExtension;
 use serde_json::{Map, Value, json};
@@ -33,7 +33,7 @@ pub fn project_json(ws: &Workspace, cache: &Cache, p: &Project) -> Result<Value>
             Some(id) => Some(views::repo_summary(cache.conn(), &id)?),
             None => None,
         },
-        None => None,
+        None => Some(ws.issue_summary(p)),
     };
     let repo_id = match repo.as_deref().and_then(|r| r.split_once('/')) {
         Some((owner, name)) => cache.repo_id(owner, name)?,
@@ -46,6 +46,7 @@ pub fn project_json(ws: &Workspace, cache: &Cache, p: &Project) -> Result<Value>
         "note": rel(ws, &p.note),
         "repo": repo,
         "repoId": repo_id,
+        "local": repo.is_none(),
         "summary": summary,
     }))
 }
@@ -174,20 +175,25 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
     };
     let mut board = match &repo_id {
         Some(id) => views::board(cache.conn(), id)?,
+        None if repo.is_none() => ws.issue_board(&project),
         None => json!({"statusField": null, "columns": []}),
     };
-    if let Some(repo) = &repo
-        && !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board"))
-    {
+    if !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board")) {
         // As wide as its columns need (Open and Closed until the first sync tells), never narrower.
         let columns = board["columns"].as_array().map_or(2, Vec::len).max(2) as f64;
         let mut extra = Map::new();
         extra.insert("neoworks".into(), json!({"kind": "board"}));
+        // A GitHub board links its repository; a local one is a group, which other JSON Canvas
+        // readers draw as a labelled frame.
+        let (kind, url, label) = match &repo {
+            Some(repo) => ("link", Some(format!("https://github.com/{repo}")), None),
+            None => ("group", None, Some("Issues".to_string())),
+        };
         canvas.nodes.insert(
             0,
             Node {
                 id: new_id(),
-                kind: "link".into(),
+                kind: kind.into(),
                 x: 0.0,
                 y: 0.0,
                 width: 24.0 + columns * 290.0,
@@ -195,8 +201,8 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
                 color: None,
                 text: None,
                 file: None,
-                url: Some(format!("https://github.com/{repo}")),
-                label: None,
+                url,
+                label,
                 extra,
             },
         );
@@ -269,10 +275,21 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
             if rel_path.ends_with(".board") {
                 return local_board(ws, &path);
             }
+            if let Some(card) = local_issue_card(ws, &path) {
+                return Ok(json!({"kind": "issue", "uri": uri.map(|u| u.to_string()), "card": card}));
+            }
             Ok(file_item(ws, uri.map(|u| u.to_string()), Some(path)))
         }
         _ => Ok(json!({"kind": "missing", "uri": uri.map(|u| u.to_string()), "title": node.kind})),
     }
+}
+
+/// The card of the local issue a file is, if it is one.
+fn local_issue_card(ws: &Workspace, path: &Path) -> Option<Value> {
+    let issue = issues::read_issue(path).ok()?;
+    let project = ws.issue_project(path).ok()?;
+    let siblings = ws.local_issues(&project);
+    Some(ws.issue_card(&project, &issue, &siblings))
 }
 
 fn file_item(ws: &Workspace, uri: Option<String>, path: Option<PathBuf>) -> Value {
@@ -344,6 +361,23 @@ pub fn arrows(ws: &Workspace, cache: &Cache, canvas: &Canvas) -> Result<Vec<Valu
                             "from": a, "to": b, "label": label, "source": "github",
                             "issues": [from, to]}));
         }
+    }
+    // Local issues placed on the canvas, by their node id.
+    let local: HashMap<String, String> = canvas
+        .nodes
+        .iter()
+        .filter_map(|n| {
+            let file = n.file.as_deref()?;
+            let path = ws.root().join(file);
+            issues::read_issue(&path).ok().map(|_| (format!("{}{file}", issues::NODE_PREFIX), n.id.clone()))
+        })
+        .collect();
+    let keys: Vec<String> = local.keys().cloned().collect();
+    for (kind, from, to) in ws.issue_links(&keys) {
+        let (Some(a), Some(b)) = (local.get(&from), local.get(&to)) else { continue };
+        let (kind, label) = if kind == "blocks" { ("blocks", "blocks") } else { ("parent-of", "parent of") };
+        out.push(json!({"id": format!("local:{kind}:{from}:{to}"), "type": kind, "from": a, "to": b, "label": label,
+                        "source": "local", "issues": [from, to]}));
     }
     for r in ws.relations()? {
         if let (Some(a), Some(b)) = (ids.get(&r.from), ids.get(&r.to)) {

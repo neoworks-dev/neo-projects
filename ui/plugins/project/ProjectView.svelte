@@ -13,7 +13,7 @@
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { app } from "../../lib/state.svelte.ts";
-  import { button, buttonHover, c, field, fieldFocus, ghost, ghostHover, radii, shadow } from "../../lib/theme.ts";
+  import { c, eyebrow, field, fieldFocus, ghost, radii, shadow } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
   import ItemNode from "./ItemNode.svelte";
   import { projectKeys } from "./keys.svelte.ts";
@@ -187,7 +187,13 @@
   }
 
   function dropped(d: unknown, at: Point) {
-    if (!isCard(d) || !d.card.url) return;
+    if (!isCard(d)) return;
+    // A local issue is a file of the workspace, so it is placed as one.
+    if (d.card.local) {
+      add({ id: newId(), type: "file", file: d.card.node.slice("issue:".length), x: at.x, y: at.y, width: 280, height: 120 }, at);
+      return;
+    }
+    if (!d.card.url) return;
     add({ id: newId(), type: "link", url: d.card.url, x: at.x, y: at.y, width: 280, height: 120 }, at);
   }
 
@@ -211,11 +217,29 @@
     await app.run(() => app.api.relate(from, to, type));
   }
 
-  const bothIssues = $derived(
-    connecting !== null &&
-      data?.nodes.find((n) => n.id === connecting!.from)?.item?.kind === "issue" &&
-      data?.nodes.find((n) => n.id === connecting!.to)?.item?.kind === "issue",
-  );
+  /** The relationships two nodes can have, and where each is kept. */
+  const connectOptions = $derived.by(() => {
+    if (!connecting || !data) return [];
+    const cardOf = (id: string) => {
+      const item = data!.nodes.find((n) => n.id === id)?.item;
+      return item?.kind === "issue" ? item.card : null;
+    };
+    const [a, b] = [cardOf(connecting.from), cardOf(connecting.to)];
+    const relates = { type: "relates", label: "Relates to", where: "Kept in relations.jsonl" };
+    if (a && b && Boolean(a.local) === Boolean(b.local)) {
+      const where = a.local ? "Kept in the issue files" : "On GitHub";
+      return [
+        { type: "blocks", label: "Blocks", where },
+        { type: "parent-of", label: "Parent of, as a sub-issue", where },
+        relates,
+      ];
+    }
+    return [
+      { type: "blocks", label: "Blocks", where: "Kept in relations.jsonl" },
+      { type: "derived-from", label: "Derived from", where: "Kept in relations.jsonl" },
+      relates,
+    ];
+  });
 
   function removeSelected(): boolean {
     if (!data) return false;
@@ -314,48 +338,51 @@
     {#if selectedArrow}
       {@const arrow = data.arrows.find((a) => a.id === selectedArrow)}
       {#if arrow}
-        <View
-          style={{ position: "absolute", bottom: 16, left: 0, right: 0, align: "center" }}
+        <Presence
+          in={[fly, { y: 10, duration: 180 }]}
+          out={[fade, { duration: 120 }]}
+          style={{ position: "absolute", top: 14, left: 0, right: 0, align: "center" }}
         >
-          <View style={{ direction: "row", gap: 8, align: "center", padding: 8, radius: 8, background: c.surface, borderWidth: 1, borderColor: c.border }}>
-            <Text style={{ fontSize: 12, color: c.muted, paddingX: 4 }}>
-              {arrow.label ?? arrow.type}{arrow.source === "github" ? " · on GitHub" : ""}
+          <View
+            style={{ direction: "row", gap: 6, align: "center", padding: 5, paddingLeft: 14, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
+            onpress={() => {}}
+          >
+            <Text style={{ fontSize: 13, color: c.text }}>{arrow.label ?? arrow.type}</Text>
+            <Text style={{ fontSize: 12, color: c.faint, paddingRight: 6 }}>
+              {arrow.source === "github" ? "on GitHub" : arrow.source === "local" ? "in the issue files" : arrow.source === "derived" ? "from GitHub" : "in relations.jsonl"}
             </Text>
-            <Button style={button} hover={buttonHover} onpress={() => removeSelected()}>
-              <Text style={{ color: c.danger }}>Remove relationship</Text>
+            <Button style={{ ...ghost, color: c.danger }} hover={{ background: c.dangerSoft }} onpress={() => removeSelected()}>
+              <Text>Remove</Text>
             </Button>
           </View>
-        </View>
+        </Presence>
       {/if}
     {/if}
 
     {#if connecting}
-      <View style={{ position: "absolute", inset: 0, background: "#00000066", align: "center", justify: "center" }}>
-        <View style={{ width: 360, padding: 16, gap: 10, radius: 12, background: c.surface, borderWidth: 1, borderColor: c.border }}>
-          <Text style={{ fontSize: 14, fontWeight: "semibold" }}>Connect as</Text>
-          {#if bothIssues}
-            <Button style={button} hover={buttonHover} onpress={() => void connect("blocks")}>
-              <Text>Blocks (on GitHub)</Text>
+      <Presence
+        in={[fade, { duration: 160 }]}
+        out={[fade, { duration: 120 }]}
+        style={{ position: "absolute", inset: 0, background: "#00000070", align: "center", justify: "center" }}
+      >
+        <View style={{ position: "absolute", inset: 0 }} onpress={() => (connecting = null)} />
+        <View
+          style={{ width: 340, padding: 6, gap: 2, radius: radii.panel, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
+          onpress={() => {}}
+        >
+          <Text style={{ ...eyebrow, padding: [10, 10, 6, 10] }}>Connect as</Text>
+          {#each connectOptions as option (option.type)}
+            <Button
+              style={{ direction: "column", align: "start", gap: 2, paddingX: 10, paddingY: 8, radius: 10, transition: 100 }}
+              hover={{ background: c.hover }}
+              onpress={() => void connect(option.type)}
+            >
+              <Text style={{ fontSize: 14, color: c.text }}>{option.label}</Text>
+              <Text style={{ fontSize: 12, color: c.faint }}>{option.where}</Text>
             </Button>
-            <Button style={button} hover={buttonHover} onpress={() => void connect("parent-of")}>
-              <Text>Parent of, as a sub-issue (on GitHub)</Text>
-            </Button>
-          {:else}
-            <Button style={button} hover={buttonHover} onpress={() => void connect("blocks")}>
-              <Text>Blocks</Text>
-            </Button>
-            <Button style={button} hover={buttonHover} onpress={() => void connect("derived-from")}>
-              <Text>Derived from</Text>
-            </Button>
-          {/if}
-          <Button style={button} hover={buttonHover} onpress={() => void connect("relates")}>
-            <Text>Relates to</Text>
-          </Button>
-          <Button style={ghost} hover={ghostHover} onpress={() => (connecting = null)}>
-            <Text>Cancel</Text>
-          </Button>
+          {/each}
         </View>
-      </View>
+      </Presence>
     {/if}
   {/if}
 </View>

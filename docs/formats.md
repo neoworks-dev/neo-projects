@@ -25,7 +25,32 @@ repos: [neoworks-dev/harness]
 roots: [harness]
 ```
 
-Everything else is yours. A repo in two projects is an error.
+Everything else is yours. A repo in two projects is an error. A project without `repos` is local;
+`statuses: [Backlog, Todo, In Progress, Done]` (the default) are its board's columns, the last
+one done.
+
+## Local issues
+
+`<project>/Issues/<number>.md`; the body is the description. Node id in the window:
+`issue:<workspace-relative path>`.
+
+```yaml
+id: 01a18e09-…
+type: issue
+number: 2
+title: Plant tomatoes
+status: In Progress
+state: closed            # absent while open
+closed: done             # or not-planned
+priority: High           # Urgent, High, Medium, Low
+effort: Low              # High, Medium, Low
+labels: [bug]
+assignees: [Letsmoe]
+blockedBy: [1]           # numbers in the same project
+parent: 3
+created: 2026-10-30T18:19:06Z
+comments: [{"author": "Letsmoe", "created": "…", "body": "…"}]
+```
 
 ## `relations.jsonl`
 

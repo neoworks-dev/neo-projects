@@ -1,11 +1,11 @@
 <script lang="ts">
   // All projects on one canvas, with the cross-repository blocks between them. Arrange the cards
-  // by dragging; double-press one to open its project.
+  // by dragging; press one to open its project.
   import { Button, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { CanvasNode, Overview, Project } from "../../lib/api.ts";
   import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { app } from "../../lib/state.svelte.ts";
-  import { button, buttonHover, c } from "../../lib/theme.ts";
+  import { c, primary, primaryHover } from "../../lib/theme.ts";
   import { dialogs } from "./dialogs.svelte.ts";
   import ProjectCard from "./ProjectCard.svelte";
 
@@ -59,13 +59,14 @@
 
 <View style={{ flex: 1 }}>
   {#if overview && nodes.length === 0}
-    <View style={{ flex: 1, align: "center", justify: "center", gap: 14 }}>
-      <Text style={{ fontSize: 20, fontWeight: "semibold" }}>No projects yet</Text>
-      <Text style={{ fontSize: 13, color: c.muted, maxWidth: 420, textAlign: "center" }}>
-        A project is one GitHub repository, with its board, notes and files. Pick the repositories you work on.
+    <View style={{ flex: 1, align: "center", justify: "center", gap: 16 }}>
+      <Text style={{ fontSize: 40, lineHeight: 44, color: c.text }}>Start a project</Text>
+      <Text style={{ fontSize: 15, lineHeight: 23, color: c.muted, maxWidth: 440, textAlign: "center" }}>
+        A board, notes and a canvas for one thing you work on. Keep its issues as files on your computer, or bring
+        them from a GitHub repository.
       </Text>
-      <Button style={button} hover={buttonHover} onpress={() => (dialogs.addProjects = true)}>
-        <Text>Add projects from GitHub</Text>
+      <Button style={{ ...primary, marginTop: 8, height: 38, paddingX: 18, radius: 19 }} hover={primaryHover} onpress={() => (dialogs.addProjects = true)}>
+        <Text>New project</Text>
       </Button>
     </View>
   {:else}

@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use np_core::github::{Client, Http};
-use np_core::workspace::{self, Uri, create_note, ensure_id, read_note, write_body};
+use np_core::workspace::{self, Uri, create_note, ensure_id, issues, read_note, write_body};
+use rusqlite::OptionalExtension;
 use np_core::{Error, fields, views};
 use serde_json::{Map, Value, json};
 use svelte_gpui::{CommandError, Commands};
@@ -75,6 +76,9 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
     command!("issue", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
         let node = arg(&args, "node")?;
+        if issues::is_local(node) {
+            return open.ws().issue_detail(node).map_err(fail);
+        }
         if !node.starts_with("local:") {
             open.sync.comments(node);
         }
@@ -82,11 +86,21 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
     });
     command!("issue_search", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
-        Ok(json!(views::search(open.cache().conn(), arg(&args, "query")?, 30).map_err(fail)?))
+        let query = arg(&args, "query")?;
+        let mut found = open.ws().search_issues(query, 30);
+        found.extend(views::search(open.cache().conn(), query, 30).map_err(fail)?);
+        Ok(json!(found))
     });
     command!("set_field", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
-        open.cache().set_field(arg(&args, "node")?, arg(&args, "field")?, args["value"].clone()).map_err(fail)?;
+        let node = arg(&args, "node")?;
+        if issues::is_local(node) {
+            let ws = open.ws().clone();
+            open.wrote(&ws.issue_path(node).map_err(fail)?);
+            ws.set_issue_field(node, arg(&args, "field")?, &args["value"]).map_err(fail)?;
+            return edited(app, &open);
+        }
+        open.cache().set_field(node, arg(&args, "field")?, args["value"].clone()).map_err(fail)?;
         edited(app, &open)
     });
     command!("move_card", |app: &App, args: Value| {
@@ -103,9 +117,28 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         edited(app, &open)?;
         Ok(json!(node))
     });
+    command!("local_issue_create", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let project = canvas::find_project(&ws, arg(&args, "folder")?).map_err(fail)?;
+        let node = ws.create_issue(&project, arg(&args, "title")?, args["column"].as_str()).map_err(fail)?;
+        let path = ws.issue_path(&node).map_err(fail)?;
+        open.wrote(&path);
+        workspace::index_path(&ws, &open.cache(), &path).map_err(fail)?;
+        edited(app, &open)?;
+        Ok(json!(node))
+    });
     command!("comment", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
-        open.cache().add_comment(arg(&args, "node")?, arg(&args, "body")?).map_err(fail)?;
+        let node = arg(&args, "node")?;
+        if issues::is_local(node) {
+            let ws = open.ws().clone();
+            open.wrote(&ws.issue_path(node).map_err(fail)?);
+            let author = ws.config().github.login.clone().or_else(|| std::env::var("USER").ok()).unwrap_or("you".into());
+            ws.add_issue_comment(node, &author, arg(&args, "body")?).map_err(fail)?;
+            return edited(app, &open);
+        }
+        open.cache().add_comment(node, arg(&args, "body")?).map_err(fail)?;
         edited(app, &open)
     });
     command!("resolve", |app: &App, args: Value| {
@@ -280,6 +313,11 @@ fn note_json(ws: &workspace::Workspace, path: &Path) -> Answer {
 /// Moves an issue to a board column: sets its Status (closing it for the done column, reopening
 /// it when it leaves), or, on an Open/Closed board, its state.
 fn move_card(open: &Open, node: &str, column: &str) -> np_core::Result<()> {
+    if issues::is_local(node) {
+        let ws = open.ws().clone();
+        open.wrote(&ws.issue_path(node)?);
+        return ws.move_issue(node, column);
+    }
     let mut cache = open.cache();
     let state = fields::read(cache.conn(), node, "state")?;
     let is_open = state["state"] == "OPEN";
@@ -342,12 +380,39 @@ fn relate(open: &Open, from: &str, to: &str, kind: &str) -> np_core::Result<()> 
         }
         return Ok(());
     }
+    if matches!(kind, "blocks" | "parent-of")
+        && let (Some(a), Some(b)) = (local_issue(open, from)?, local_issue(open, to)?)
+    {
+        let ws = open.ws().clone();
+        open.wrote(&ws.issue_path(&b)?);
+        if kind == "blocks" {
+            let mut blocked: Vec<Value> = ws.issue_detail(&b)?["blockedByList"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|l| l["node"].clone())
+                .collect();
+            blocked.push(json!(a));
+            return ws.set_issue_field(&b, "blockedBy", &json!(blocked));
+        }
+        return ws.set_issue_field(&b, "parent", &json!(a));
+    }
     Uri::parse(from)?;
     Uri::parse(to)?;
     let ws = open.ws().clone();
     open.wrote(&ws.relations_path());
     ws.add_relation(kind, from, to, None, None, "user")?;
     Ok(())
+}
+
+/// The local issue a canvas URI names (a note id, as canvases name notes), as its node id.
+fn local_issue(open: &Open, uri: &str) -> np_core::Result<Option<String>> {
+    let Some(id) = uri.strip_prefix("note:") else { return Ok(None) };
+    let path: Option<String> =
+        open.cache().conn().query_row("SELECT path FROM notes WHERE id = ?1", [id], |r| r.get(0)).optional()?;
+    let ws = open.ws().clone();
+    let Some(path) = path.map(PathBuf::from).filter(|p| issues::read_issue(p).is_ok()) else { return Ok(None) };
+    Ok(Some(format!("{}{}", issues::NODE_PREFIX, rel(&ws, &path))))
 }
 
 fn unrelate(open: &Open, arrow: &Value) -> np_core::Result<()> {
@@ -364,6 +429,25 @@ fn unrelate(open: &Open, arrow: &Value) -> np_core::Result<()> {
                 cache.set_field(to, "blockedBy", json!(rest))?;
             } else {
                 cache.set_field(to, "parent", Value::Null)?;
+            }
+        }
+        Some("local") => {
+            let (Some(from), Some(to)) = (arrow["issues"][0].as_str(), arrow["issues"][1].as_str()) else {
+                return Err(Error::Other("not a local relationship".into()));
+            };
+            let ws = open.ws().clone();
+            open.wrote(&ws.issue_path(to)?);
+            if arrow["type"] == "blocks" {
+                let rest: Vec<Value> = ws.issue_detail(to)?["blockedByList"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|l| l["node"].clone())
+                    .filter(|n| n != from)
+                    .collect();
+                ws.set_issue_field(to, "blockedBy", &json!(rest))?;
+            } else {
+                ws.set_issue_field(to, "parent", &Value::Null)?;
             }
         }
         Some("file") => {

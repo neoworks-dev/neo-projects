@@ -26,6 +26,8 @@ export interface Card {
   updated: string | null;
   pending: boolean;
   conflict: boolean;
+  /** A local issue: a Markdown file in its project's Issues folder, `node` being `issue:<path>`. */
+  local?: boolean;
 }
 
 export interface Column {
@@ -58,6 +60,8 @@ export interface Project {
   note: string;
   repo: string | null;
   repoId: string | null;
+  /** No repository: its issues are local files. */
+  local: boolean;
   summary: Summary | null;
 }
 
@@ -106,7 +110,7 @@ export interface Arrow {
   from: string;
   to: string;
   label?: string | null;
-  source: "github" | "file" | "derived";
+  source: "github" | "local" | "file" | "derived";
   count?: number;
   /** The two issues' node ids, for a GitHub relationship. */
   issues?: [string, string];
@@ -211,6 +215,8 @@ export const api = {
   moveCard: (node: string, column: string) => invoke<null>("move_card", { node, column }),
   createIssue: (repo: string, title: string, column: string | null) =>
     invoke<string>("create_issue", { repo, title, column }),
+  createLocalIssue: (folder: string, title: string, column: string | null) =>
+    invoke<string>("local_issue_create", { folder, title, column }),
   comment: (node: string, body: string) => invoke<null>("comment", { node, body }),
   resolve: (node: string, field: string, keepLocal: boolean) =>
     invoke<null>("resolve", { node, field, keepLocal }),

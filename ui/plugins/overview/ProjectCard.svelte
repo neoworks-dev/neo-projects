@@ -30,7 +30,7 @@
       {project.name}
     </Text>
     {#if zoom >= 0.5}
-      <Text style={{ fontSize: s(11), color: c.faint, truncate: true }}>{project.repo ?? "no repository"}</Text>
+      <Text style={{ fontSize: s(11), color: c.faint, truncate: true }}>{project.repo ?? "Local project"}</Text>
     {/if}
   </View>
   {#if summary && zoom >= 0.5}

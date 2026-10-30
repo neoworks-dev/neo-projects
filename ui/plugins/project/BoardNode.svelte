@@ -38,7 +38,12 @@
     const text = title.trim();
     adding = null;
     title = "";
-    if (!text || !project.repoId) return;
+    if (!text) return;
+    if (project.local) {
+      await app.run(() => app.api.createLocalIssue(project.folder, text, column));
+      return;
+    }
+    if (!project.repoId) return;
     await app.run(() => app.api.createIssue(project.repoId!, text, column === "open" ? null : column));
   }
 
@@ -56,8 +61,8 @@
   }}
 >
   <View style={{ direction: "row", align: "center", gap: s(8), height: s(40), paddingX: s(14), cursor: "grab" }}>
-    <Text style={{ fontSize: s(13), fontWeight: "semibold" }}>Board</Text>
-    <Text style={{ fontSize: s(12), color: c.faint }}>{project.repo}</Text>
+    <Text style={{ fontSize: s(13), fontWeight: "semibold" }}>{project.local ? "Issues" : "Board"}</Text>
+    <Text style={{ fontSize: s(12), color: c.faint }}>{project.repo ?? `${project.folder}/Issues`}</Text>
     {#if !board.statusField && board.columns.length > 0}
       <Text style={{ fontSize: s(11), color: c.faint }}>· no Status field, so Open and Closed</Text>
     {/if}
@@ -85,7 +90,7 @@
             <Text style={{ fontSize: s(10), color: c.faint }}>+{placed[column.key]} on canvas</Text>
           {/if}
           <View style={{ flex: 1 }} />
-          {#if project.repoId}
+          {#if project.repoId || project.local}
             <Button
               style={{ paddingX: s(5), radius: s(4), color: c.muted, fontSize: s(14) }}
               hover={{ background: c.hover, color: c.text }}

@@ -7,6 +7,7 @@
 pub mod board;
 pub mod canvas;
 pub mod index;
+pub mod issues;
 pub mod note;
 pub mod project;
 pub mod relations;

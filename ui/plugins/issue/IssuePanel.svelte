@@ -568,7 +568,10 @@
           placeholder="Leave a comment…  Ctrl+Enter sends"
           style={{ flex: 1, fontSize: 14, lineHeight: 20, color: c.text, paddingY: 5, background: "transparent" }}
           onkey={(e) => {
-            if (e.key === "Enter" && (e.ctrl || e.meta)) void sendReply();
+            if (e.key !== "Enter" || !(e.ctrl || e.meta)) return;
+            // The field would otherwise take the Enter after the text is cleared.
+            e.preventDefault();
+            void sendReply();
           }}
         />
         <Button

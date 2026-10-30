@@ -153,6 +153,10 @@ impl Board {
     /// Whether the board's filter lets a note in. `workspace` is the workspace folder.
     pub fn matches(&self, note: &Note, workspace: &Path) -> bool {
         let f = &self.filter;
+        // A local issue has a status too, but it belongs on its project's issue board.
+        if note.props.get("type").and_then(Value::as_str) == Some("issue") {
+            return false;
+        }
         if let Some(folder) = &f.folder
             && !note.path.starts_with(workspace.join(folder.trim_matches('/')))
         {
@@ -301,6 +305,9 @@ mod tests {
         n.props.insert("tags".into(), json!(["a", "b"]));
         assert!(board.matches(&n, Path::new("/w")));
         assert!(!board.matches(&n, Path::new("/other")), "wrong folder");
+        n.props.insert("type".into(), json!("issue"));
+        assert!(!board.matches(&n, Path::new("/w")), "a local issue");
+        n.props.remove("type");
         n.props.remove("status");
         assert!(!board.matches(&n, Path::new("/w")), "no status");
     }
