@@ -6,39 +6,41 @@
   import { arrowHead, type Point } from "./geometry.ts";
 
   interface Props {
-    /** The ends, in the coordinates of the layer it sits in. */
-    from: Point;
-    to: Point;
+    /** The points to draw through, in the coordinates of the layer it sits in. */
+    points: Point[];
     color: string;
     width?: number;
     head?: boolean;
   }
 
-  let { from, to, color, width = 1.75, head = true }: Props = $props();
+  let { points, color, width = 1.75, head = true }: Props = $props();
 
   const pad = 12;
   // The canvas grows in steps, so a drag redraws it in place instead of resizing it each frame:
   // a canvas keeps its pixels when resized, so what was drawn before the resize would be clipped.
   const step = 96;
-  const left = $derived(Math.min(from.x, to.x) - pad);
-  const top = $derived(Math.min(from.y, to.y) - pad);
-  const w = $derived(Math.ceil((Math.abs(to.x - from.x) + 2 * pad) / step) * step);
-  const h = $derived(Math.ceil((Math.abs(to.y - from.y) + 2 * pad) / step) * step);
+  const left = $derived(Math.min(...points.map((p) => p.x)) - pad);
+  const top = $derived(Math.min(...points.map((p) => p.y)) - pad);
+  const w = $derived(Math.ceil((Math.max(...points.map((p) => p.x)) - left + pad) / step) * step);
+  const h = $derived(Math.ceil((Math.max(...points.map((p) => p.y)) - top + pad) / step) * step);
 
   let ink = $state<Canvas>();
 
   $effect(() => {
-    if (!ink) return;
-    const p = { x: from.x - left, y: from.y - top };
-    const q = { x: to.x - left, y: to.y - top };
-    const pen = { color, width };
+    if (!ink || points.length < 2) return;
+    const local = points.map((p) => ({ x: p.x - left, y: p.y - top }));
     ink.clear();
-    ink.line(p.x, p.y, q.x, q.y, pen);
-    if (head) {
-      const [l, r] = arrowHead(p, q, 9);
-      ink.line(q.x, q.y, l.x, l.y, pen);
-      ink.line(q.x, q.y, r.x, r.y, pen);
-    }
+    ink.begin(local[0].x, local[0].y, { color, width });
+    for (const p of local.slice(1)) ink.lineTo(p.x, p.y);
+    ink.end();
+    if (!head) return;
+    // The head points along the last stretch of the path, which on a curve is nearly square to
+    // the side it arrives at.
+    const tip = local[local.length - 1];
+    const before = local[Math.max(0, local.length - 3)];
+    const [l, r] = arrowHead(before, tip, 9);
+    ink.line(tip.x, tip.y, l.x, l.y, { color, width });
+    ink.line(tip.x, tip.y, r.x, r.y, { color, width });
   });
 </script>
 

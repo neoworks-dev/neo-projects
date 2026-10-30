@@ -40,7 +40,7 @@
   } from "@neoworks/svelte-gpui/ui";
   import type { Snippet } from "svelte";
   import { c } from "../theme.ts";
-  import { arrowEnds, contains, type Point } from "./geometry.ts";
+  import { arrowPath, contains, midpoint, type Point } from "./geometry.ts";
   import Ink from "./Ink.svelte";
 
   interface Props {
@@ -136,28 +136,41 @@
     );
   });
 
+  // An arrow's path is kept while neither end moved, so a drag only redraws the arrows on the
+  // dragged node: a new array would make every arrow's canvas draw again.
+  let paths = new Map<string, { key: string; points: Point[]; mid: Point }>();
+
   /** Arrows in layer coordinates (world times zoom), with their midpoints for labels. */
-  const lines = $derived(
-    arrows.flatMap((a) => {
+  const lines = $derived.by(() => {
+    const next = new Map<string, { key: string; points: Point[]; mid: Point }>();
+    const out = arrows.flatMap((a) => {
       const from = byId.get(a.from);
       const to = byId.get(a.to);
       if (!from || !to) return [];
-      const ends = arrowEnds(from, to);
-      if (!ends) return [];
-      const [p, q] = ends.map((e) => ({ x: e.x * zoom, y: e.y * zoom }));
-      return [{ arrow: a, p, q, mid: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 } }];
-    }),
-  );
+      const key = `${from.x},${from.y},${from.w},${from.h},${to.x},${to.y},${to.w},${to.h},${zoom}`;
+      let path = paths.get(a.id);
+      if (path?.key !== key) {
+        const world = arrowPath(from, to);
+        if (!world) return [];
+        const points = world.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
+        path = { key, points, mid: midpoint(points) };
+      }
+      next.set(a.id, path);
+      return [{ arrow: a, points: path.points, mid: path.mid }];
+    });
+    paths = next;
+    return out;
+  });
 
   /** The arrow being drawn, in layer coordinates. */
   const linkLine = $derived.by(() => {
     if (!link) return null;
     const from = byId.get(link.from);
     if (!from) return null;
-    return {
-      p: { x: (from.x + from.w) * zoom, y: (from.y + from.h / 2) * zoom },
-      q: { x: link.to.x - shift[0], y: link.to.y - shift[1] },
-    };
+    const at = toWorld(link.to);
+    const world = arrowPath(from, { x: at.x, y: at.y, w: 0, h: 0 });
+    if (!world) return null;
+    return world.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
   });
 
   // Pointer moves come faster than frames (a 1000 Hz mouse sends sixteen a frame); only the last
@@ -302,12 +315,12 @@
     />
   </DropTarget>
   <View style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, translate: shift }}>
-    {#each lines as { arrow, p, q } (arrow.id)}
+    {#each lines as { arrow, points } (arrow.id)}
       {@const chosen = arrow.id === selectedArrow}
-      <Ink from={p} to={q} color={chosen ? c.accent : (arrow.color ?? c.borderStrong)} width={chosen ? 2.5 : 1.75} />
+      <Ink {points} color={chosen ? c.accent : (arrow.color ?? c.borderStrong)} width={chosen ? 2.5 : 1.75} />
     {/each}
     {#if linkLine}
-      <Ink from={linkLine.p} to={linkLine.q} color={c.accent} width={2} head={false} />
+      <Ink points={linkLine} color={c.accent} width={2} head={false} />
     {/if}
     {#each lines as { arrow, mid } (arrow.id)}
       {@const chosen = arrow.id === selectedArrow}

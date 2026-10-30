@@ -18,5 +18,6 @@
       "@neoworks/extension-system": ["../extension-system/lib/index"]
     }
   },
-  "include": ["ui"]
+  "include": ["ui"],
+  "exclude": ["ui/**/*.test.ts"]
 }
