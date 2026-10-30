@@ -137,6 +137,22 @@
     save(data.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)));
   }
 
+  /**
+   * How small a node can be resized, so its title stays readable: sticky notes, notes and issue
+   * cards resize, the rest keep their size.
+   */
+  function minSize(n: Placed): { w: number; h: number } | null {
+    if (n.raw.type === "text") return { w: 120, h: 80 };
+    if (n.raw.item?.kind === "note") return { w: 160, h: 90 };
+    if (n.raw.item?.kind === "issue") return { w: 200, h: 96 };
+    return null;
+  }
+
+  function resizedNode(id: string, rect: { x: number; y: number; w: number; h: number }) {
+    if (!data) return;
+    save(data.nodes.map((n) => (n.id === id ? { ...n, x: rect.x, y: rect.y, width: rect.w, height: rect.h } : n)));
+  }
+
   /** Glides so every node is in view, above the toolbar. */
   function fit() {
     if (nodes.length === 0) return;
@@ -332,6 +348,8 @@
       {selected}
       {selectedArrow}
       linkable
+      {minSize}
+      onresized={resizedNode}
       onselect={select}
       onopen={open}
       onselectarrow={(id) => (selectedArrow = id)}

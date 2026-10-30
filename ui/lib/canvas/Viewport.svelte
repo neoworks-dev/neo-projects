@@ -40,7 +40,7 @@
   } from "@neoworks/svelte-gpui/ui";
   import type { Snippet } from "svelte";
   import { c } from "../theme.ts";
-  import { arrowPath, contains, midpoint, type Point } from "./geometry.ts";
+  import { arrowPath, contains, handlePoint, handles, midpoint, resized, type Handle, type Point, type Rect } from "./geometry.ts";
   import Ink from "./Ink.svelte";
 
   interface Props {
@@ -55,6 +55,9 @@
     movable?: (node: N) => boolean;
     /** Whether arrows can be drawn from the selected node. */
     linkable?: boolean;
+    /** The smallest a node can be resized to, or null when it can't be resized. */
+    minSize?: (node: N) => { w: number; h: number } | null;
+    onresized?: (id: string, rect: Rect) => void;
     onselect?: (id: string | null) => void;
     /** A double press on a node. */
     onopen?: (id: string) => void;
@@ -78,6 +81,8 @@
     node,
     movable = () => true,
     linkable = false,
+    minSize = () => null,
+    onresized,
     onselect,
     onopen,
     onpress,
@@ -106,8 +111,13 @@
   // pan changes one style however many nodes there are.
   const shift = $derived<[number, number]>([-view.x * zoom, -view.y * zoom]);
 
+  /** A node being resized by one of its handles: its box when it started, and as it is now. */
+  let resize = $state<{ id: string; handle: Handle; start: Rect; from: Point; rect: Rect } | null>(null);
+
   function placed(n: N): N {
-    return drag && drag.id === n.id ? { ...n, x: drag.x, y: drag.y } : n;
+    if (drag && drag.id === n.id) return { ...n, x: drag.x, y: drag.y };
+    if (resize && resize.id === n.id) return { ...n, ...resize.rect };
+    return n;
   }
 
   const shown = $derived(nodes.map(placed));
@@ -268,6 +278,33 @@
     drag = null;
   }
 
+  function resizeDown(n: N, handle: Handle, e: PointerEvent) {
+    if (e.button !== 0) return;
+    const start = { x: n.x, y: n.y, w: n.w, h: n.h };
+    resize = { id: n.id, handle, start, from: { x: e.windowX, y: e.windowY }, rect: start };
+  }
+
+  function resizeMove(n: N, e: PointerEvent) {
+    const min = minSize(n);
+    if (!resize || !min) return;
+    const { windowX, windowY, shift } = e;
+    later(() => {
+      if (!resize) return;
+      const dx = (windowX - resize.from.x) / zoom;
+      const dy = (windowY - resize.from.y) / zoom;
+      resize = { ...resize, rect: resized(resize.start, resize.handle, dx, dy, min, shift) };
+    });
+  }
+
+  function resizeUp() {
+    flush();
+    const done = resize;
+    resize = null;
+    if (!done) return;
+    const { rect, start } = done;
+    if (rect.x !== start.x || rect.y !== start.y || rect.w !== start.w || rect.h !== start.h) onresized?.(done.id, rect);
+  }
+
   function linkDown(n: N, e: PointerEvent) {
     link = { from: n.id, to: local(e) };
   }
@@ -358,12 +395,40 @@
       >
         {@render node(n, zoom)}
       </View>
+      {@const min = selected === n.id ? minSize(n) : null}
+      {#if min}
+        <!-- Squares on the corners and sides, each in a larger hit area so it is easy to grab. -->
+        {#each handles as handle (handle)}
+          {@const at = handlePoint(n, handle)}
+          {@const side = handle.length === 1}
+          <View
+            style={{
+              position: "absolute",
+              left: at.x * zoom - 9,
+              top: at.y * zoom - 9,
+              size: 18,
+              align: "center",
+              justify: "center",
+              cursor: !side ? "default" : handle === "e" || handle === "w" ? "col-resize" : "row-resize",
+            }}
+            ondown={(e) => resizeDown(n, handle, e)}
+            onmove={(e) => resizeMove(n, e)}
+            onup={resizeUp}
+          >
+            <View
+              style={{ size: side ? 7 : 9, radius: 2, background: c.surface, borderWidth: 1.5, borderColor: c.accent }}
+              hover={{ background: c.accent }}
+            />
+          </View>
+        {/each}
+      {/if}
       {#if linkable && selected === n.id}
-        <!-- A small dot on the right edge, in a larger hit area so it is easy to grab. -->
+        <!-- A small dot past the right edge (clear of a resize handle there), in a larger hit
+             area so it is easy to grab. -->
         <View
           style={{
             position: "absolute",
-            left: (n.x + n.w) * zoom - 11,
+            left: (n.x + n.w) * zoom - 11 + (min ? 22 : 0),
             top: (n.y + n.h / 2) * zoom - 11,
             size: 22,
             align: "center",
