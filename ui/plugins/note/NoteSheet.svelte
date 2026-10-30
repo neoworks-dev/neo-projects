@@ -5,16 +5,14 @@
   // hands it to your editor.
   import { Button, Icon, Input, Presence, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
   import { Tooltip } from "@neoworks/svelte-gpui-ui";
-  import arrowsIn from "@phosphor-icons/core/regular/arrows-in-simple.svg";
-  import arrowsOut from "@phosphor-icons/core/regular/arrows-out-simple.svg";
-  import external from "@phosphor-icons/core/regular/arrow-square-out.svg";
-  import close from "@phosphor-icons/core/regular/x.svg";
   import { cubicOut } from "svelte/easing";
   import { fade, fly } from "svelte/transition";
   import type { Note } from "../../lib/api.ts";
   import Markdown from "../../lib/markdown/Markdown.svelte";
   import { app } from "../../lib/state.svelte.ts";
   import { c, radii, shadow } from "../../lib/theme.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { collapse: arrowsIn, expand: arrowsOut, external, close } = icons;
 
   let { path }: { path: string } = $props();
 

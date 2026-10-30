@@ -17,20 +17,11 @@
   // link to it there; double-press it to open it.
   import { Button, Draggable, Icon, Text, Tree, View } from "@neoworks/svelte-gpui/ui";
   import { Tooltip } from "@neoworks/svelte-gpui-ui";
-  import file from "@phosphor-icons/core/regular/file.svg";
-  import fileAudio from "@phosphor-icons/core/regular/file-audio.svg";
-  import fileCode from "@phosphor-icons/core/regular/file-code.svg";
-  import fileImage from "@phosphor-icons/core/regular/file-image.svg";
-  import fileMd from "@phosphor-icons/core/regular/file-md.svg";
-  import filePdf from "@phosphor-icons/core/regular/file-pdf.svg";
-  import fileVideo from "@phosphor-icons/core/regular/file-video.svg";
-  import fileZip from "@phosphor-icons/core/regular/file-zip.svg";
-  import folderOpen from "@phosphor-icons/core/regular/folder-open.svg";
-  import folder from "@phosphor-icons/core/regular/folder-simple.svg";
-  import close from "@phosphor-icons/core/regular/x.svg";
   import type { DirEntry, Project } from "../../lib/api.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c, eyebrow, radii, shadow } from "../../lib/theme.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { file, fileAudio, fileCode, fileImage, fileMarkdown: fileMd, filePdf, fileVideo, fileArchive: fileZip, folderOpen, folderClosed: folder, close } = icons;
 
   let { project, onclose }: { project: Project; onclose: () => void } = $props();
 

@@ -2,12 +2,13 @@
   // Everything on a project canvas that isn't the board: a note (a card), an image, a file, a web
   // link, an issue placed off the board, a local board. Drawn at `zoom`.
   import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
-  import fileText from "@phosphor-icons/core/regular/file-text.svg";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
   import { plainText } from "../../lib/markdown/plain.ts";
   import { c, ring } from "../../lib/theme.ts";
   import LocalBoard from "./LocalBoard.svelte";
+  import { icons } from "../../lib/icons.ts";
+  const { fileText } = icons;
 
   let { item, zoom, selected }: { item: Item; zoom: number; selected: boolean } = $props();
 

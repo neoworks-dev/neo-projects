@@ -10,9 +10,11 @@
     Scroll,
     Text,
     View,
+    Icon,
   } from "@neoworks/svelte-gpui/ui";
   import type { Board, Card, Project } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
+  import { icons, stateIcon } from "../../lib/icons.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c, tone } from "../../lib/theme.ts";
 
@@ -83,7 +85,8 @@
         over={{ background: c.accentSoft, borderColor: c.accent }}
       >
         <View style={{ direction: "row", align: "center", gap: s(6), paddingX: s(4), height: s(26) }}>
-          <View style={{ width: s(8), height: s(8), radius: s(4), background: tone(column.color) }} />
+          {@const head = stateIcon({ state: column.done || column.key === "closed" ? "CLOSED" : "OPEN", stateReason: null, fields: { Status: column.name } })}
+          <Icon svg={head.icon} size={s(14)} color={column.key === "none" ? c.faint : head.color} />
           <Text style={{ fontSize: s(12), fontWeight: "semibold", nowrap: true }}>{column.name}</Text>
           <Text style={{ fontSize: s(11), color: c.faint }}>{column.cards.length}</Text>
           {#if placed[column.key]}
@@ -92,14 +95,14 @@
           <View style={{ flex: 1 }} />
           {#if project.repoId || project.local}
             <Button
-              style={{ paddingX: s(5), radius: s(4), color: c.muted, fontSize: s(14) }}
+              style={{ size: s(24), radius: s(6), align: "center", justify: "center", color: c.muted, transition: 120 }}
               hover={{ background: c.hover, color: c.text }}
               onpress={() => {
                 adding = column.key;
                 title = "";
               }}
             >
-              <Text>+</Text>
+              <Icon svg={icons.add} size={s(14)} />
             </Button>
           {/if}
         </View>

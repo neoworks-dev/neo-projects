@@ -1,10 +1,10 @@
 <script lang="ts">
   // The status bar's start: the workspace folder and, inside a project, its folder, as a path.
   import { Icon, Text } from "@neoworks/svelte-gpui/ui";
-  import caret from "@phosphor-icons/core/regular/caret-right.svg";
-  import folder from "@phosphor-icons/core/regular/folder.svg";
   import { app } from "../../lib/state.svelte.ts";
   import { c } from "../../lib/theme.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { next: caret, folder } = icons;
 
   const parts = $derived.by(() => {
     const workspace = app.workspace?.split("/").filter(Boolean).pop();

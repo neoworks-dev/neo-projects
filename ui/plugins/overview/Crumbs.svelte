@@ -2,13 +2,11 @@
   // Where you are, at the top bar's start, as on neoworks.dev: the mark and name, a divider, then
   // Projects and the open project with where it lives (its repository, or local).
   import { Button, Icon, Text, View } from "@neoworks/svelte-gpui/ui";
-  import caret from "@phosphor-icons/core/regular/caret-right.svg";
-  import folder from "@phosphor-icons/core/regular/folder.svg";
-  import github from "@phosphor-icons/core/regular/github-logo.svg";
-  import mark from "@phosphor-icons/core/regular/prohibit.svg";
   import type { Project } from "../../lib/api.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c } from "../../lib/theme.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { next: caret, folder, github, mark } = icons;
 
   const folderName = $derived(app.route.view === "project" ? app.route.project : null);
   let project = $state<Project | null>(null);

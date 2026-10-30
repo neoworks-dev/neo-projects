@@ -5,28 +5,14 @@
   // conversation, with the comment box kept at the bottom.
   import { Button, Icon, Input, Popover, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
   import { Tooltip } from "@neoworks/svelte-gpui-ui";
-  import arrowUpRight from "@phosphor-icons/core/regular/arrow-square-out.svg";
-  import reopen from "@phosphor-icons/core/regular/arrow-counter-clockwise.svg";
-  import calendar from "@phosphor-icons/core/regular/calendar-blank.svg";
-  import checkCircle from "@phosphor-icons/core/regular/check-circle.svg";
-  import circleDashed from "@phosphor-icons/core/regular/circle-dashed.svg";
-  import circleHalf from "@phosphor-icons/core/regular/circle-half.svg";
-  import hash from "@phosphor-icons/core/regular/hash.svg";
-  import lightning from "@phosphor-icons/core/regular/lightning.svg";
-  import send from "@phosphor-icons/core/regular/paper-plane-right.svg";
-  import plus from "@phosphor-icons/core/regular/plus.svg";
-  import signal from "@phosphor-icons/core/regular/cell-signal-full.svg";
-  import tag from "@phosphor-icons/core/regular/tag.svg";
-  import textIcon from "@phosphor-icons/core/regular/text-t.svg";
-  import users from "@phosphor-icons/core/regular/users.svg";
-  import close from "@phosphor-icons/core/regular/x.svg";
-  import notPlanned from "@phosphor-icons/core/regular/x-circle.svg";
   import type { Card, IssueDetail, Linked } from "../../lib/api.ts";
   import Avatar from "../../lib/Avatar.svelte";
   import Markdown from "../../lib/markdown/Markdown.svelte";
   import Picker from "../../lib/Picker.svelte";
   import { app } from "../../lib/state.svelte.ts";
   import { button, buttonHover, c, eyebrow, labelColor, radii, shadow, tone, tones } from "../../lib/theme.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { external: arrowUpRight, reopen, date: calendar, closeDone: checkCircle, status: circleDashed, field: circleHalf, number: hash, effort: lightning, send, add: plus, priority: signal, labels: tag, text: textIcon, assignees: users, close, closeNotPlanned: notPlanned } = icons;
 
   let { node }: { node: string } = $props();
 

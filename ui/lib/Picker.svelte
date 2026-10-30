@@ -14,9 +14,10 @@
   // you type, a dot in each option's colour, a check on what is chosen. One choice closes it;
   // with `multiple`, each press toggles and it stays open.
   import { Button, Icon, Input, Popover, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
-  import check from "@phosphor-icons/core/bold/check-bold.svg";
   import type { Snippet } from "svelte";
   import { c, radii, shadow } from "./theme.ts";
+  import { icons } from "./icons.ts";
+  const { check } = icons;
 
   interface Props {
     options: PickerOption[];

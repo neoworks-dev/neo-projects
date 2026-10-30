@@ -3,12 +3,12 @@
   // bottom a button for a new project. The open one is marked by a bar at the rail's edge.
   import { Button, Icon, Text, View } from "@neoworks/svelte-gpui/ui";
   import { Tooltip } from "@neoworks/svelte-gpui-ui";
-  import plus from "@phosphor-icons/core/regular/plus.svg";
-  import squares from "@phosphor-icons/core/regular/squares-four.svg";
   import type { Project } from "../../lib/api.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c, projectColor, projectInitials } from "../../lib/theme.ts";
   import { dialogs } from "./dialogs.svelte.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { add: plus, overview: squares } = icons;
 
   let projects = $state<Project[]>([]);
 

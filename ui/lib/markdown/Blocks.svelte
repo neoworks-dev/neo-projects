@@ -16,14 +16,14 @@
   // lists, quotes, code, tables, rules and images. Lists and quotes hold blocks of their own,
   // so this draws itself for them.
   import { Icon, Image, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
-  import checkSquare from "@phosphor-icons/core/fill/check-square-fill.svg";
-  import square from "@phosphor-icons/core/regular/square.svg";
   import type { Token, Tokens } from "marked";
   import { c, radii } from "../theme.ts";
   import Blocks from "./Blocks.svelte";
   import Code from "./Code.svelte";
   import Inline from "./Inline.svelte";
   import { links, onlyImages, resolveSrc } from "./parse.ts";
+  import { icons } from "../icons.ts";
+  const { taskDone: checkSquare, taskOpen: square } = icons;
 
   let { tokens, ctx, tight = false }: { tokens: Token[]; ctx: MarkdownContext; tight?: boolean } = $props();
 

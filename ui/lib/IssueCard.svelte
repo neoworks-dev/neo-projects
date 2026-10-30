@@ -1,7 +1,8 @@
 <script lang="ts">
   // An issue as a card: number, title, labels, Priority, who's on it, and whether it is blocked,
   // waiting to sync or in conflict. Drawn at `zoom` on a canvas, at 1 in lists.
-  import { Text, View } from "@neoworks/svelte-gpui/ui";
+  import { Icon, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { icons, stateIcon } from "./icons.ts";
   import type { Card } from "./api.ts";
   import Avatar from "./Avatar.svelte";
   import { plainText } from "./markdown/plain.ts";
@@ -20,6 +21,7 @@
 
   const s = (n: number) => n * zoom;
   const closed = $derived(card.state === "CLOSED");
+  const state = $derived(stateIcon(card));
   const excerpt = $derived(fill ? plainText(card.excerpt ?? "", 320) : "");
   const priority = $derived(card.fields.Priority as string | undefined);
   const priorityColor: Record<string, string> = {
@@ -50,15 +52,16 @@
     <Text style={{ fontSize: s(26), color: c.text, fontWeight: "medium", maxLines: 3 }}>{card.title}</Text>
   {:else}
     <View style={{ direction: "row", align: "center", gap: s(6) }}>
-      <View
-        style={{ width: s(8), height: s(8), radius: s(4), background: closed ? tones.PURPLE : tones.GREEN, shrink: 0 }}
-      />
+      <Icon svg={state.icon} size={s(14)} color={state.color} />
       <Text style={{ fontSize: s(11), color: c.muted, nowrap: true }}>
         {showRepo ? card.repoName : ""}{card.number ? `#${card.number}` : "new"}
       </Text>
       <View style={{ flex: 1 }} />
       {#if card.blockedBy > 0}
-        <Text style={{ fontSize: s(11), color: c.danger, nowrap: true }}>⛔ {card.blockedBy}</Text>
+        <View style={{ direction: "row", align: "center", gap: s(3) }}>
+          <Icon svg={icons.blocked} size={s(12)} color={c.danger} />
+          <Text style={{ fontSize: s(11), color: c.danger, nowrap: true }}>{card.blockedBy}</Text>
+        </View>
       {/if}
       {#if card.conflict}
         <Text style={{ fontSize: s(11), color: c.danger }}>conflict</Text>

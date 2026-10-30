@@ -13,12 +13,11 @@
   // its percentage and Fit.
   import { Button, Icon, Text, View } from "@neoworks/svelte-gpui/ui";
   import { Tooltip } from "@neoworks/svelte-gpui-ui";
-  import corners from "@phosphor-icons/core/regular/corners-out.svg";
-  import minus from "@phosphor-icons/core/regular/minus.svg";
-  import plus from "@phosphor-icons/core/regular/plus.svg";
   import { c, radii, shadow } from "../theme.ts";
   import { glide, zoomedAbout } from "./motion.ts";
   import type { ViewState } from "./Viewport.svelte";
+  import { icons } from "../icons.ts";
+  const { fit: corners, remove: minus, add: plus } = icons;
 
   interface Props {
     tools: Tool[];

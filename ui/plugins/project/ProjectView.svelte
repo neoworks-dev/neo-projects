@@ -3,10 +3,6 @@
   // dragged out of the board, notes, files, links, local boards. Arrows are relationships: between
   // two issues they can be blocks or sub-issues on GitHub; anything else is kept in the workspace.
   import { Button, Input, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
-  import kanban from "@phosphor-icons/core/regular/kanban.svg";
-  import linkIcon from "@phosphor-icons/core/regular/link.svg";
-  import treeView from "@phosphor-icons/core/regular/tree-view.svg";
-  import notePencil from "@phosphor-icons/core/regular/note-pencil.svg";
   import { fade, fly } from "svelte/transition";
   import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
@@ -19,6 +15,8 @@
   import Files, { isFileDrag } from "./Files.svelte";
   import ItemNode from "./ItemNode.svelte";
   import { projectKeys } from "./keys.svelte.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { board: kanban, link: linkIcon, files: treeView, note: notePencil } = icons;
 
   let { folder }: { folder: string } = $props();
 

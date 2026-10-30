@@ -3,15 +3,14 @@
   // (yours and your organizations', newest first, or one typed as owner/name). Each becomes a
   // folder with its project note.
   import { Button, Icon, Input, Presence, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
-  import check from "@phosphor-icons/core/bold/check-bold.svg";
-  import folder from "@phosphor-icons/core/regular/folder-simple.svg";
-  import github from "@phosphor-icons/core/regular/github-logo.svg";
   import { cubicOut } from "svelte/easing";
   import { fade, fly } from "svelte/transition";
   import type { GithubRepo } from "../../lib/api.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c, eyebrow, field, fieldFocus, ghost, ghostHover, primary, primaryHover, radii, shadow } from "../../lib/theme.ts";
   import { dialogs } from "./dialogs.svelte.ts";
+  import { icons } from "../../lib/icons.ts";
+  const { check, folderClosed: folder, github } = icons;
 
   let mode = $state<"local" | "github">("local");
   let name = $state("");
