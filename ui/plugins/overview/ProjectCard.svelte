@@ -3,7 +3,7 @@
   // what is in progress, and a bar of the Status split.
   import { Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Project } from "../../lib/api.ts";
-  import { c, projectColor, projectInitials, tone } from "../../lib/theme.ts";
+  import { c, projectColor, projectInitials, ring, tone } from "../../lib/theme.ts";
 
   let { project, zoom, selected }: { project: Project; zoom: number; selected: boolean } = $props();
 
@@ -20,7 +20,8 @@
     gap: s(10),
     radius: s(12),
     background: c.surface,
-    borderWidth: selected ? 2 : 1,
+    borderWidth: 1,
+    shadow: selected ? ring : null,
     borderColor: selected ? c.accent : c.border,
     overflow: "hidden",
     transition: 140,

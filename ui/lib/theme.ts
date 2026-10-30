@@ -47,6 +47,15 @@ export const shadow: Shadow[] = [
   { x: 0, y: 12, blur: 32, spread: -8, color: "rgba(0, 0, 0, 0.55)" },
 ];
 
+/**
+ * A selected card: a soft ring outside a 1 px accent border, so selecting changes no sizes and
+ * the card keeps the same weight as its neighbours.
+ */
+export const ring: Shadow[] = [
+  { x: 0, y: 0, blur: 0, spread: 3, color: "#4576b438" },
+  { x: 0, y: 10, blur: 28, spread: -8, color: "rgba(0, 0, 0, 0.6)" },
+];
+
 /** Easing for things that arrive: fast out, soft landing. */
 export const ease = { duration: 180, easing: "ease-out" } as const;
 

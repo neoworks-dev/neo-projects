@@ -105,3 +105,16 @@ fn open_blocks_between_repositories_are_counted_per_pair() {
     let b1 = views::card(cache.conn(), "B1").unwrap().unwrap();
     assert_eq!(b1["blockedBy"], 2, "the closed blocker doesn't count");
 }
+
+#[test]
+fn a_card_carries_the_start_of_its_description() {
+    let cache = Cache::open_in_memory().unwrap();
+    repo(&cache, "R1", "o", "r");
+    issue(&cache, "I1", "R1", 1, "OPEN", json!({}));
+    let long = format!("  First line.\n{}", "x".repeat(700));
+    cache.conn().execute("UPDATE gh_issues SET body = ?1 WHERE node_id = 'I1'", [&long]).unwrap();
+    let card = views::card(cache.conn(), "I1").unwrap().unwrap();
+    let excerpt = card["excerpt"].as_str().unwrap();
+    assert!(excerpt.starts_with("First line.\nx"));
+    assert_eq!(excerpt.chars().count(), 600);
+}

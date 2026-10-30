@@ -289,6 +289,7 @@ impl Workspace {
             "blockedBy": open_with(issue.numbers("blockedBy")),
             "blocking": blocking,
             "comments": issue.comments().len(),
+            "excerpt": crate::views::excerpt(&issue.body),
             "url": null,
             "updated": issue.str("created"),
             "pending": false,

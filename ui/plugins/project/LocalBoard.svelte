@@ -4,7 +4,7 @@
   import { Button, Draggable, DropTarget, Input, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import { app } from "../../lib/state.svelte.ts";
-  import { c } from "../../lib/theme.ts";
+  import { c, ring } from "../../lib/theme.ts";
 
   type LocalBoardItem = Extract<Item, { kind: "localboard" }>;
   let { item, zoom, selected }: { item: LocalBoardItem; zoom: number; selected: boolean } = $props();
@@ -42,7 +42,8 @@
     flex: 1,
     radius: s(12),
     background: c.surface,
-    borderWidth: selected ? 2 : 1,
+    borderWidth: 1,
+    shadow: selected ? ring : null,
     borderColor: selected ? c.accent : c.border,
     overflow: "hidden",
   }}

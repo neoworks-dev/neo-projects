@@ -22,6 +22,8 @@ export interface Card {
   blockedBy: number;
   blocking: number;
   comments: number;
+  /** The start of the description, as Markdown. */
+  excerpt: string;
   url: string | null;
   updated: string | null;
   pending: boolean;

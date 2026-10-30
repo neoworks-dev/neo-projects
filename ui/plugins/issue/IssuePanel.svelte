@@ -22,6 +22,7 @@
   import close from "@phosphor-icons/core/regular/x.svg";
   import notPlanned from "@phosphor-icons/core/regular/x-circle.svg";
   import type { Card, IssueDetail, Linked } from "../../lib/api.ts";
+  import Avatar from "../../lib/Avatar.svelte";
   import Picker from "../../lib/Picker.svelte";
   import { app } from "../../lib/state.svelte.ts";
   import { button, buttonHover, c, eyebrow, labelColor, radii, shadow, tone, tones } from "../../lib/theme.ts";
@@ -193,26 +194,6 @@
   const iconButton = { size: 30, radius: 8, align: "center", justify: "center", color: c.muted, transition: 120 } as const;
   const iconHover = { background: c.hover, color: c.text };
 </script>
-
-{#snippet avatar(login: string | null, size: number)}
-  {@const tint = login ? labelColor(null) : c.faint}
-  <View
-    style={{
-      size,
-      radius: size / 2,
-      align: "center",
-      justify: "center",
-      background: c.hover,
-      borderWidth: 1,
-      borderColor: c.border,
-      shrink: 0,
-    }}
-  >
-    <Text style={{ fontSize: size * 0.42, fontWeight: "semibold", color: login ? c.muted : tint }}>
-      {(login ?? "?").slice(0, 2).toUpperCase()}
-    </Text>
-  </View>
-{/snippet}
 
 {#snippet property(icon: string, label: string)}
   <View style={{ direction: "row", align: "center", gap: 8, width: 112, shrink: 0, height: 28 }}>
@@ -435,7 +416,7 @@
                   <View style={{ direction: "row", wrap: true, gap: 8 }}>
                     {#each issue.assigneesFull as user (user.id)}
                       <View style={{ direction: "row", align: "center", gap: 6 }}>
-                        {@render avatar(user.login, 20)}
+                        <Avatar login={user.login} size={20} github={!issue.local} />
                         <Text style={{ fontSize: 13 }}>{user.login}</Text>
                       </View>
                     {/each}
@@ -525,7 +506,7 @@
           <Text style={{ ...eyebrow, paddingX: 7 }}>Activity · {issue.commentList.length}</Text>
           {#each issue.commentList as comment (comment.id)}
             <View style={{ direction: "row", gap: 10, paddingX: 6, opacity: comment.pending ? 0.6 : 1 }}>
-              {@render avatar(comment.author, 26)}
+              <Avatar login={comment.author} size={28} github={!issue.local} />
               <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                 <View style={{ direction: "row", gap: 6, align: "center" }}>
                   <Text style={{ fontSize: 13, fontWeight: "medium" }}>{comment.author ?? "?"}</Text>

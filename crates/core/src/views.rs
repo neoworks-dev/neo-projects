@@ -47,7 +47,7 @@ pub fn card(conn: &Connection, node: &str) -> Result<Option<Value>> {
     let row = conn
         .query_row(
             "SELECT i.node_id, i.repo, r.owner || '/' || r.name, i.number, i.title, i.state, i.state_reason, i.labels,
-                    i.assignees, i.fields, i.url, i.updated, i.comment_count
+                    i.assignees, i.fields, i.url, i.updated, i.comment_count, i.body
              FROM gh_issues i JOIN gh_repos r ON r.node_id = i.repo WHERE i.node_id = ?1",
             [node],
             |r| {
@@ -65,11 +65,12 @@ pub fn card(conn: &Connection, node: &str) -> Result<Option<Value>> {
                     r.get::<_, Option<String>>(10)?,
                     r.get::<_, Option<String>>(11)?,
                     r.get::<_, i64>(12)?,
+                    r.get::<_, String>(13)?,
                 ))
             },
         )
         .optional()?;
-    let Some((id, repo, repo_name, number, title, state, reason, labels, assignees, fields, url, updated, comments)) =
+    let Some((id, repo, repo_name, number, title, state, reason, labels, assignees, fields, url, updated, comments, body)) =
         row
     else {
         return Ok(None);
@@ -100,11 +101,17 @@ pub fn card(conn: &Connection, node: &str) -> Result<Option<Value>> {
         "blocking": count(conn, "SELECT count(*) FROM gh_links l JOIN gh_issues t ON t.node_id = l.to_node
                                 WHERE l.kind = 'blocks' AND l.from_node = ?1 AND t.state = 'OPEN'", &id)?,
         "comments": comments,
+        "excerpt": excerpt(&body),
         "url": url,
         "updated": updated,
         "pending": count(conn, "SELECT count(*) FROM outbox WHERE target = ?1", &id)? > 0,
         "conflict": count(conn, "SELECT count(*) FROM conflicts WHERE target = ?1", &id)? > 0,
     })))
+}
+
+/// The start of a description, for a card: enough for a few lines, cut at a character boundary.
+pub fn excerpt(body: &str) -> String {
+    body.trim().chars().take(600).collect()
 }
 
 fn count(conn: &Connection, sql: &str, arg: &str) -> Result<i64> {

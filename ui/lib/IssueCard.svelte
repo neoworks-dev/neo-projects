@@ -3,7 +3,9 @@
   // waiting to sync or in conflict. Drawn at `zoom` on a canvas, at 1 in lists.
   import { Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Card } from "./api.ts";
-  import { c, labelColor, tones } from "./theme.ts";
+  import Avatar from "./Avatar.svelte";
+  import { plainText } from "./markdown/plain.ts";
+  import { c, labelColor, ring, tones } from "./theme.ts";
 
   interface Props {
     card: Card;
@@ -18,6 +20,7 @@
 
   const s = (n: number) => n * zoom;
   const closed = $derived(card.state === "CLOSED");
+  const excerpt = $derived(fill ? plainText(card.excerpt ?? "", 320) : "");
   const priority = $derived(card.fields.Priority as string | undefined);
   const priorityColor: Record<string, string> = {
     Urgent: tones.PINK,
@@ -34,7 +37,8 @@
     gap: s(6),
     radius: s(8),
     background: c.raised,
-    borderWidth: selected ? 2 : 1,
+    borderWidth: 1,
+    shadow: selected ? ring : null,
     borderColor: selected ? c.accent : card.conflict ? c.danger : c.border,
     overflow: "hidden",
     opacity: closed ? 0.6 : 1,
@@ -63,45 +67,56 @@
       {/if}
     </View>
     <Text style={{ fontSize: s(13), color: c.text, lineHeight: s(18), maxLines: 3 }}>{card.title}</Text>
+    {#if fill && excerpt}
+      <Text style={{ fontSize: s(12), color: c.muted, lineHeight: s(17.5), maxLines: 4 }}>{excerpt}</Text>
+      <View style={{ flex: 1 }} />
+    {/if}
     {#if card.labels.length > 0 || priority || card.assignees.length > 0}
-      <View style={{ direction: "row", wrap: true, gap: s(4), align: "center" }}>
-        {#if priority}
-          <View
-            style={{
-              direction: "row",
-              align: "center",
-              gap: s(4),
-              paddingX: s(5),
-              height: s(18),
-              radius: s(4),
-              borderWidth: 1,
-              borderColor: c.border,
-            }}
-          >
-            <View style={{ width: s(6), height: s(6), radius: s(3), background: priorityColor[priority] ?? tones.GRAY }} />
-            <Text style={{ fontSize: s(10), color: c.muted }}>{priority}</Text>
-          </View>
-        {/if}
-        {#each card.labels.slice(0, 3) as label (label.name)}
-          <View
-            style={{
-              direction: "row",
-              align: "center",
-              gap: s(4),
-              paddingX: s(5),
-              height: s(18),
-              radius: s(9),
-              borderWidth: 1,
-              borderColor: c.border,
-            }}
-          >
-            <View style={{ width: s(6), height: s(6), radius: s(3), background: labelColor(label.color) }} />
-            <Text style={{ fontSize: s(10), color: c.muted, nowrap: true }}>{label.name}</Text>
-          </View>
-        {/each}
+      <View style={{ direction: "row", gap: s(4), align: "center" }}>
+        <View style={{ flex: 1, minWidth: 0, direction: "row", wrap: true, gap: s(4), align: "center" }}>
+          {#if priority}
+            <View
+              style={{
+                direction: "row",
+                align: "center",
+                gap: s(4),
+                paddingX: s(5),
+                height: s(18),
+                radius: s(4),
+                borderWidth: 1,
+                borderColor: c.border,
+              }}
+            >
+              <View style={{ width: s(6), height: s(6), radius: s(3), background: priorityColor[priority] ?? tones.GRAY }} />
+              <Text style={{ fontSize: s(10), color: c.muted }}>{priority}</Text>
+            </View>
+          {/if}
+          {#each card.labels.slice(0, 3) as label (label.name)}
+            <View
+              style={{
+                direction: "row",
+                align: "center",
+                gap: s(4),
+                paddingX: s(5),
+                height: s(18),
+                radius: s(9),
+                borderWidth: 1,
+                borderColor: c.border,
+              }}
+            >
+              <View style={{ width: s(6), height: s(6), radius: s(3), background: labelColor(label.color) }} />
+              <Text style={{ fontSize: s(10), color: c.muted, nowrap: true }}>{label.name}</Text>
+            </View>
+          {/each}
+        </View>
         {#if card.assignees.length > 0}
-          <View style={{ flex: 1 }} />
-          <Text style={{ fontSize: s(10), color: c.faint }}>@{card.assignees[0]}</Text>
+          <View style={{ direction: "row" }}>
+            {#each card.assignees.slice(0, 3) as login, i (login)}
+              <View style={{ marginLeft: i > 0 ? -s(6) : 0 }}>
+                <Avatar {login} size={s(20)} github={!card.local} outline={c.raised} />
+              </View>
+            {/each}
+          </View>
         {/if}
       </View>
     {/if}

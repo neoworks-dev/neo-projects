@@ -366,28 +366,32 @@
         {@render node(n, zoom)}
       </View>
       {#if linkable && selected === n.id}
+        <!-- A small dot on the right edge, in a larger hit area so it is easy to grab. -->
         <View
           style={{
             position: "absolute",
-            left: (n.x + n.w) * zoom - 9,
-            top: (n.y + n.h / 2) * zoom - 9,
-            width: 18,
-            height: 18,
-            radius: 9,
-            background: c.accent,
-            borderWidth: 2,
-            borderColor: c.bg,
-            cursor: "crosshair",
+            left: (n.x + n.w) * zoom - 11,
+            top: (n.y + n.h / 2) * zoom - 11,
+            size: 22,
             align: "center",
             justify: "center",
-            transition: 120,
+            cursor: "crosshair",
           }}
-          hover={{ background: c.accentHover }}
           ondown={(e) => linkDown(n, e)}
           onmove={linkMove}
           onup={linkUp}
         >
-          <Text style={{ fontSize: 10, color: c.onAccent, lineHeight: 10 }}>→</Text>
+          <View
+            style={{
+              size: 11,
+              radius: 6,
+              background: c.surface,
+              borderWidth: 2,
+              borderColor: c.accent,
+              transition: 120,
+            }}
+            hover={{ background: c.accent }}
+          />
         </View>
       {/if}
     {/each}
