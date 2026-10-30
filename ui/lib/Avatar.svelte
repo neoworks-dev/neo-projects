@@ -2,7 +2,7 @@
   // A person as a round picture: their GitHub avatar, over their initials, which show while it
   // loads and stay for people GitHub doesn't know (assignees of local issues).
   import { Image, Text, View } from "@neoworks/svelte-gpui/ui";
-  import { c } from "./theme.ts";
+  import { projectColor } from "./theme.ts";
 
   interface Props {
     login: string | null;
@@ -16,6 +16,7 @@
   let { login, size = 20, github = true, outline }: Props = $props();
 
   let failed = $state(false);
+  const tint = $derived(projectColor(login ?? "?"));
 </script>
 
 <View
@@ -24,14 +25,14 @@
     radius: size / 2,
     align: "center",
     justify: "center",
-    background: c.hover,
-    borderWidth: outline ? 2 : 1,
-    borderColor: outline ?? c.border,
+    background: tint.line,
+    borderWidth: outline ? 2 : 0,
+    borderColor: outline ?? "transparent",
     overflow: "hidden",
     shrink: 0,
   }}
 >
-  <Text style={{ fontSize: size * 0.4, fontWeight: "medium", color: c.muted }}>{(login ?? "?").slice(0, 2).toUpperCase()}</Text>
+  <Text style={{ fontSize: size * 0.4, fontWeight: "medium", color: "#ffffff" }}>{(login ?? "?").slice(0, 2).toUpperCase()}</Text>
   {#if github && login && !failed}
     <Image
       src={`https://avatars.githubusercontent.com/${login}?s=${Math.round(size * 2)}`}
