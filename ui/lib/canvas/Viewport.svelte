@@ -63,8 +63,6 @@
     onselectarrow?: (id: string | null) => void;
     onmoved?: (id: string, x: number, y: number) => void;
     onconnect?: (from: string, to: string) => void;
-    /** A double press on empty canvas, at that world point. */
-    onbackground?: (at: Point) => void;
     onfiles?: (paths: string[], at: Point) => void;
     /** Which in-app drags the canvas takes, and what to do with one dropped at a world point. */
     accept?: (data: unknown) => boolean;
@@ -86,7 +84,6 @@
     onselectarrow,
     onmoved,
     onconnect,
-    onbackground,
     onfiles,
     accept = () => false,
     ondropdata,
@@ -200,10 +197,6 @@
   }
 
   function backgroundDown(e: PointerEvent) {
-    if (e.clicks === 2) {
-      onbackground?.(toWorld(local(e)));
-      return;
-    }
     pan = { view: { ...view }, from: { x: e.windowX, y: e.windowY } };
     panning = true;
     onselect?.(null);

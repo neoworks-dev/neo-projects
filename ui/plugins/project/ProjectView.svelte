@@ -286,7 +286,6 @@
       onselectarrow={(id) => (selectedArrow = id)}
       onmoved={moved}
       onconnect={(from, to) => (connecting = { from, to })}
-      onbackground={(at) => void newNote(at)}
       onfiles={(paths, at) => void files(paths, at)}
       accept={isCard}
       ondropdata={dropped}
