@@ -24,14 +24,40 @@ fn s(v: &Value) -> Option<&str> {
     v.as_str()
 }
 
-/// Pulls one repository: its labels, assignable users and issue fields, then every issue
-/// updated since the last pull. Each page of issues is its own transaction, so an interrupted
-/// pull keeps what it got.
+/// How long a repository's labels, assignable users and issue fields are trusted before a pull
+/// asks again. They rarely change, and skipping them halves what polling 50 repositories costs.
+const META_SECONDS: i64 = 15 * 60;
+
+/// Pulls one repository: its labels, assignable users and issue fields (at most every
+/// [`META_SECONDS`]), then every issue updated since the last pull. Each page of issues is its
+/// own transaction, so an interrupted pull keeps what it got.
 pub fn pull<T: Transport>(cache: &mut Cache, client: &Client<T>, owner: &str, name: &str) -> Result<PullReport> {
-    let meta = client.run(META, json!({"owner": owner, "name": name}))?;
-    let repo = &meta["repository"];
-    let repo_id = s(&repo["id"]).ok_or_else(|| Error::Other(format!("{owner}/{name} not found")))?.to_string();
-    store_meta(cache, &meta, &repo_id, owner, name)?;
+    let key = format!("meta_at:{owner}/{name}");
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let fresh: Option<String> = cache
+        .conn
+        .query_row("SELECT value FROM meta WHERE key = ?1", [&key], |r| r.get(0))
+        .optional()?
+        .filter(|at: &String| at.parse::<i64>().is_ok_and(|at| now_secs - at < META_SECONDS));
+    let known = cache.repo_id(owner, name)?;
+    let repo_id = match (fresh, known) {
+        (Some(_), Some(id)) => id,
+        _ => {
+            let meta = client.run(META, json!({"owner": owner, "name": name}))?;
+            let id = s(&meta["repository"]["id"])
+                .ok_or_else(|| Error::Other(format!("{owner}/{name} not found")))?
+                .to_string();
+            store_meta(cache, &meta, &id, owner, name)?;
+            cache.conn.execute(
+                "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                params![key, now_secs.to_string()],
+            )?;
+            id
+        }
+    };
 
     let since: Option<String> = cache
         .conn

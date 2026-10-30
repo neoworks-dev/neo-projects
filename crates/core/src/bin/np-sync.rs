@@ -79,6 +79,20 @@ fn run() -> Result<()> {
             let repo = cache.repo_id(owner, name)?.ok_or_else(|| err("not pulled yet"))?;
             println!("queued as {}", cache.create_issue(&repo, title, "")?);
         }
+        "board" | "summary" => {
+            let (owner, name) = split_repo(rest.first().map(String::as_str).unwrap_or_default())?;
+            let repo = cache.repo_id(owner, name)?.ok_or_else(|| err("not pulled yet"))?;
+            let view = if command == "board" {
+                np_core::views::board(cache.conn(), &repo)?
+            } else {
+                np_core::views::repo_summary(cache.conn(), &repo)?
+            };
+            println!("{}", serde_json::to_string_pretty(&view)?);
+        }
+        "issue" => {
+            let node = issue_node(&cache, rest.first().map(String::as_str).unwrap_or_default())?;
+            println!("{}", serde_json::to_string_pretty(&np_core::views::issue(cache.conn(), &node)?)?);
+        }
         "comment" => {
             let [target, body] = rest else { return Err(err("comment OWNER/REPO#N BODY")) };
             let node = issue_node(&cache, target)?;

@@ -10,6 +10,7 @@ pub mod edit;
 pub mod error;
 pub mod fields;
 pub mod github;
+pub mod views;
 
 pub use cache::Cache;
 pub use error::{Error, Result};
