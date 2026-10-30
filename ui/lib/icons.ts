@@ -35,6 +35,7 @@ import kanban from "@phosphor-icons/core/regular/kanban.svg";
 import lightning from "@phosphor-icons/core/regular/lightning.svg";
 import link from "@phosphor-icons/core/regular/link.svg";
 import minus from "@phosphor-icons/core/regular/minus.svg";
+import noteBlank from "@phosphor-icons/core/regular/note-blank.svg";
 import notePencil from "@phosphor-icons/core/regular/note-pencil.svg";
 import paperPlaneRight from "@phosphor-icons/core/regular/paper-plane-right.svg";
 import plus from "@phosphor-icons/core/regular/plus.svg";
@@ -72,6 +73,7 @@ export const icons = {
   local: folderSimple,
   // Things on the canvas
   note: notePencil,
+  sticky: noteBlank,
   link,
   board: kanban,
   // Properties

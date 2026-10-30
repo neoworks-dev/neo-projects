@@ -14,9 +14,11 @@
     onlink?: (href: string) => void;
     /** A press anywhere that isn't a link. */
     onpress?: () => void;
+    /** Off to leave presses to what is around the text, such as a node being dragged. */
+    interactive?: boolean;
   }
 
-  let { source, size = 15, base = null, onlink, onpress }: Props = $props();
+  let { source, size = 15, base = null, onlink, onpress, interactive = true }: Props = $props();
 
   const tokens = $derived(parse(source));
   const ctx = $derived({
@@ -24,9 +26,16 @@
     base,
     onlink: onlink ?? ((href: string) => void app.run(() => app.api.open(href))),
     onplain: () => onpress?.(),
+    interactive,
   });
 </script>
 
-<View style={{ gap: Math.round(size * 0.75) }} onpress={() => onpress?.()}>
-  <Blocks {tokens} {ctx} />
-</View>
+{#if interactive}
+  <View style={{ gap: Math.round(size * 0.75) }} onpress={() => onpress?.()}>
+    <Blocks {tokens} {ctx} />
+  </View>
+{:else}
+  <View style={{ gap: Math.round(size * 0.75) }}>
+    <Blocks {tokens} {ctx} />
+  </View>
+{/if}

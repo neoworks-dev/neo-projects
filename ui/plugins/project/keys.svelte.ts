@@ -6,6 +6,8 @@ class ProjectKeys {
   note: (() => void) | null = null;
   /** Opens the field for adding a link. */
   link: (() => void) | null = null;
+  /** Adds a sticky note in the middle of the view, ready to write in. */
+  sticky: (() => void) | null = null;
   /** Shows or hides the file explorer. */
   files: (() => void) | null = null;
 }

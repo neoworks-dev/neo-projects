@@ -10,10 +10,11 @@
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { app } from "../../lib/state.svelte.ts";
-  import { c, eyebrow, field, fieldFocus, ghost, radii, shadow } from "../../lib/theme.ts";
+  import { c, eyebrow, field, fieldFocus, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
   import Files, { isFileDrag } from "./Files.svelte";
   import ItemNode from "./ItemNode.svelte";
+  import StickyNote, { stickyColors } from "./StickyNote.svelte";
   import { projectKeys } from "./keys.svelte.ts";
   import { icons } from "../../lib/icons.ts";
   const { board: kanban, link: linkIcon, files: treeView, note: notePencil } = icons;
@@ -45,6 +46,7 @@
   const tools: Tool[] = [
     { icon: treeView, label: "Files", key: "F", onpress: () => (filesOpen = !filesOpen) },
     { icon: notePencil, label: "Note", key: "N", onpress: () => void newNote(centre()) },
+    { icon: icons.sticky, label: "Sticky note", key: "S", onpress: () => newSticky(centre()) },
     { icon: linkIcon, label: "Link", key: "L", onpress: () => (linkOpen = !linkOpen) },
     { icon: kanban, label: "Notes board", onpress: () => void newBoard() },
   ];
@@ -155,12 +157,37 @@
 
   function open(id: string) {
     selected = id;
+    if (data?.nodes.find((n) => n.id === id)?.type === "text") {
+      editing = id;
+      return;
+    }
     const item = data?.nodes.find((n) => n.id === id)?.item;
     if (!item) return;
     if (item.kind === "issue") app.select({ kind: "issue", node: item.card.node });
     else if (item.kind === "note") app.select({ kind: "note", path: item.path });
     else if (item.kind === "image" || item.kind === "file") void app.run(() => app.api.open(item.path));
     else if (item.kind === "link") void app.run(() => app.api.open(item.uri));
+  }
+
+  const selectedNode = $derived(data?.nodes.find((n) => n.id === selected) ?? null);
+
+  /** The sticky note being written in place. */
+  let editing = $state<string | null>(null);
+
+  function newSticky(at: Point) {
+    const id = newId();
+    add({ id, type: "text", text: "", color: "3", x: at.x, y: at.y, width: 240, height: 170 }, at);
+    editing = id;
+  }
+
+  function setText(id: string, text: string) {
+    if (!data) return;
+    save(data.nodes.map((n) => (n.id === id ? { ...n, text } : n)));
+  }
+
+  function setColor(id: string, color: string) {
+    if (!data) return;
+    save(data.nodes.map((n) => (n.id === id ? { ...n, color } : n)));
   }
 
   async function newNote(at: Point) {
@@ -285,11 +312,13 @@
     projectKeys.note = () => void newNote(centre());
     projectKeys.link = () => (linkOpen = true);
     projectKeys.files = () => (filesOpen = !filesOpen);
+    projectKeys.sticky = () => newSticky(centre());
     return () => {
       projectKeys.remove = null;
       projectKeys.note = null;
       projectKeys.link = null;
       projectKeys.files = null;
+      projectKeys.sticky = null;
     };
   });
 </script>
@@ -315,6 +344,16 @@
       {#snippet node(n, zoom)}
         {#if n.raw.item?.kind === "board"}
           <BoardNode board={data!.board} project={data!.project} {zoom} {placed} />
+        {:else if n.raw.type === "text"}
+          <StickyNote
+            text={n.raw.text ?? ""}
+            color={n.raw.color}
+            {zoom}
+            selected={selected === n.id}
+            editing={editing === n.id}
+            onchange={(text) => setText(n.id, text)}
+            ondone={() => (editing = null)}
+          />
         {:else if n.raw.item}
           <ItemNode item={n.raw.item} {zoom} selected={selected === n.id} />
         {/if}
@@ -362,6 +401,29 @@
             }}
           />
           <Text style={{ fontSize: 11, color: c.faint, paddingX: 2 }}>Files: drop them from your file manager.</Text>
+        </View>
+      </Presence>
+    {/if}
+
+    {#if selectedNode?.type === "text" && editing !== selectedNode.id}
+      {@const sticky = selectedNode}
+      <Presence
+        in={[fly, { y: 10, duration: 180 }]}
+        out={[fade, { duration: 120 }]}
+        style={{ position: "absolute", top: 14, left: 0, right: 0, align: "center" }}
+      >
+        <View
+          style={{ direction: "row", gap: 6, align: "center", padding: 6, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
+          onpress={() => {}}
+        >
+          {#each stickyColors as color (color)}
+            {@const tint = stickyTint(color)}
+            <Button
+              style={{ size: 22, radius: 11, background: tint.background, borderWidth: 2, borderColor: (sticky.color ?? "3") === color ? c.text : tint.border, transition: 120 }}
+              hover={{ borderColor: c.text }}
+              onpress={() => setColor(sticky.id, color)}
+            />
+          {/each}
         </View>
       </Presence>
     {/if}

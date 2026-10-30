@@ -18,6 +18,7 @@ they live, never copied. GitHub stays the place for issues; the app keeps a cach
 - **Project canvas:** the repository's board, laid out by the organization's `Status` issue field
   (Open and Closed without one). Drag cards between columns to change their status, out onto the
   canvas to place them, back onto the board to return them. "+" in a column creates an issue.
+- **Sticky notes:** S or the toolbar; Markdown written right on the canvas, kept in the `.canvas` file.
 - **Notes, files, links:** N or the toolbar for a note, drop files from your file manager,
   add web links. Notes boards group notes by a front matter field.
 - **Relationships:** drag the handle of a selected node onto another. Between two issues that is

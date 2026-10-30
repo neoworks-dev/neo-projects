@@ -169,3 +169,17 @@ export const codeColors: Record<string, string> = {
   punctuation: t.colors.muted,
   plain: t.colors.text,
 };
+
+/** A sticky note's colours, by its JSON Canvas colour (a preset "1" to "6"; yellow when unset). */
+export function stickyTint(color: string | undefined): { background: string; border: string; text: string } {
+  const presets: Record<string, (typeof t.scales)["lake"]> = {
+    "1": t.scales.rock,
+    "2": t.scales.larch,
+    "3": t.scales.larch,
+    "4": t.scales.pine,
+    "5": t.scales.lake,
+    "6": t.scales.lake,
+  };
+  const scale = presets[color ?? "3"] ?? t.scales.larch;
+  return { background: scale[4], border: scale[6], text: scale[12] };
+}

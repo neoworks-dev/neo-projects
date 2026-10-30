@@ -8,6 +8,8 @@
     onlink: (href: string) => void;
     /** A press on the text that isn't a link: the place to start editing. */
     onplain: () => void;
+    /** Off where the text sits on something that is dragged, such as a sticky note. */
+    interactive: boolean;
   }
 </script>
 
@@ -67,9 +69,13 @@
         {/each}
       </View>
     {:else}
-      <View onpress={() => press(p.tokens)}>
+      {#if ctx.interactive}
+        <View onpress={() => press(p.tokens)}>
+          <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} /></Text>
+        </View>
+      {:else}
         <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} /></Text>
-      </View>
+      {/if}
     {/if}
   {:else if token.type === "text"}
     {@const t = token as Tokens.Text}
