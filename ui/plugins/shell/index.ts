@@ -15,6 +15,9 @@ export const shell = {
       slots: {
         "shell.top": "list",
         "shell.top.right": "list",
+        "shell.rail": "list",
+        "shell.status": "list",
+        "shell.status.right": "list",
         "shell.main": { kind: "chain", fallback: Empty },
         "shell.panel": "chain",
         "shell.overlay": "list",

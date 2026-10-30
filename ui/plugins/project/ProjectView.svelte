@@ -2,13 +2,18 @@
   // A project's canvas: its GitHub board as one region, and around it whatever you place: issues
   // dragged out of the board, notes, files, links, local boards. Arrows are relationships: between
   // two issues they can be blocks or sub-issues on GitHub; anything else is kept in the workspace.
-  import { window } from "@neoworks/svelte-gpui";
-  import { Button, Input, Popover, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { Button, Input, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
+  import kanban from "@phosphor-icons/core/regular/kanban.svg";
+  import linkIcon from "@phosphor-icons/core/regular/link.svg";
+  import notePencil from "@phosphor-icons/core/regular/note-pencil.svg";
+  import { fade, fly } from "svelte/transition";
   import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
+  import { glide } from "../../lib/canvas/motion.ts";
+  import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { app } from "../../lib/state.svelte.ts";
-  import { button, buttonHover, c, field, fieldFocus, ghost, ghostHover } from "../../lib/theme.ts";
+  import { button, buttonHover, c, field, fieldFocus, ghost, ghostHover, radii, shadow } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
   import ItemNode from "./ItemNode.svelte";
   import { projectKeys } from "./keys.svelte.ts";
@@ -22,6 +27,23 @@
   let connecting = $state<{ from: string; to: string } | null>(null);
   let linkUrl = $state("");
   let linkOpen = $state(false);
+  let size = $state({ width: 800, height: 600 });
+  let linkInput = $state<Input>();
+
+  $effect(() => linkInput?.focus());
+
+  async function newBoard() {
+    const project = data?.project;
+    if (!project) return;
+    const node = await app.run(() => app.api.createBoard(project.folder, "Notes board"));
+    if (node) add(node, centre());
+  }
+
+  const tools: Tool[] = [
+    { icon: notePencil, label: "Note", key: "N", onpress: () => void newNote(centre()) },
+    { icon: linkIcon, label: "Link", key: "L", onpress: () => (linkOpen = !linkOpen) },
+    { icon: kanban, label: "Notes board", onpress: () => void newBoard() },
+  ];
 
   $effect(() => {
     void app.version;
@@ -101,18 +123,17 @@
     save(data.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)));
   }
 
-  /** Zooms and pans so every node is in view, below the toolbar. */
+  /** Glides so every node is in view, above the toolbar. */
   function fit() {
     if (nodes.length === 0) return;
-    const width = window.size.width - (app.selection ? 460 : 0);
-    const height = window.size.height - 44;
     const left = Math.min(...nodes.map((n) => n.x));
     const top = Math.min(...nodes.map((n) => n.y));
     const right = Math.max(...nodes.map((n) => n.x + n.w));
     const bottom = Math.max(...nodes.map((n) => n.y + n.h));
     const pad = 40;
-    const zoom = Math.min(1.2, (width - 2 * pad) / (right - left), (height - 2 * pad - 50) / (bottom - top));
-    view = { x: left - pad / zoom, y: top - (pad + 50) / zoom, zoom };
+    const toolbar = 64;
+    const zoom = Math.min(1.2, (size.width - 2 * pad) / (right - left), (size.height - 2 * pad - toolbar) / (bottom - top));
+    glide(view, { x: left - pad / zoom, y: top - pad / zoom, zoom }, (next) => (view = next));
   }
 
   /** A press selects (and shows the handle for drawing an arrow); a double press opens. */
@@ -142,7 +163,7 @@
   }
 
   function centre(): Point {
-    return { x: view.x + 400 / view.zoom, y: view.y + 300 / view.zoom };
+    return { x: view.x + (size.width / 2 - 140) / view.zoom, y: view.y + (size.height / 2 - 80) / view.zoom };
   }
 
   async function files(paths: string[], at: Point) {
@@ -221,7 +242,7 @@
   });
 </script>
 
-<View style={{ flex: 1 }}>
+<View style={{ flex: 1 }} onlayout={(l) => (size = l)}>
   {#if data}
     <Viewport
       {nodes}
@@ -249,50 +270,40 @@
       {/snippet}
     </Viewport>
 
-    <View style={{ position: "absolute", top: 12, left: 12, direction: "row", gap: 6 }}>
-      <Button style={button} hover={buttonHover} onpress={() => void newNote(centre())}>
-        <Text>+ Note</Text>
-      </Button>
-      <Popover bind:open={linkOpen} side="bottom" align="start">
-        {#snippet trigger({ toggle })}
-          <Button style={button} hover={buttonHover} onpress={toggle}><Text>+ Link</Text></Button>
-        {/snippet}
-        {#snippet children({ close })}
-          <View style={{ width: 340, padding: 10, gap: 8, radius: 8, background: c.surface, borderWidth: 1, borderColor: c.border }}>
-            <Input
-              bind:value={linkUrl}
-              placeholder="https://…"
-              style={field}
-              focus={fieldFocus}
-              onsubmit={async () => {
-                const url = linkUrl.trim();
-                close();
-                linkUrl = "";
-                if (!url) return;
-                const node = await app.run(() => app.api.linkUrl(url));
-                if (node) add(node, centre());
-              }}
-            />
-            <Text style={{ fontSize: 11, color: c.faint }}>Enter to add. Files: drop them from your file manager.</Text>
-          </View>
-        {/snippet}
-      </Popover>
-      <Button
-        style={button}
-        hover={buttonHover}
-        onpress={async () => {
-          const project = data?.project;
-          if (!project) return;
-          const node = await app.run(() => app.api.createBoard(project.folder, "Notes board"));
-          if (node) add(node, centre());
-        }}
+    <Toolbar {tools} bind:view {size} onfit={fit} />
+
+    {#if linkOpen}
+      <Presence
+        in={[fly, { y: 8, duration: 180 }]}
+        out={[fade, { duration: 120 }]}
+        style={{ position: "absolute", bottom: 72, left: 0, right: 0, align: "center" }}
       >
-        <Text>+ Notes board</Text>
-      </Button>
-      <Button style={ghost} hover={ghostHover} onpress={fit}>
-        <Text>Fit</Text>
-      </Button>
-    </View>
+        <View
+          style={{ width: 360, padding: 10, gap: 8, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
+          onpress={() => {}}
+        >
+          <Input
+            bind:value={linkUrl}
+            placeholder="Paste a link, Enter to add"
+            bind:this={linkInput}
+            style={field}
+            focus={fieldFocus}
+            onsubmit={async () => {
+              const url = linkUrl.trim();
+              linkOpen = false;
+              linkUrl = "";
+              if (!url) return;
+              const node = await app.run(() => app.api.linkUrl(url));
+              if (node) add(node, centre());
+            }}
+            oncommit={() => {
+              if (!linkUrl.trim()) linkOpen = false;
+            }}
+          />
+          <Text style={{ fontSize: 11, color: c.faint, paddingX: 2 }}>Files: drop them from your file manager.</Text>
+        </View>
+      </Presence>
+    {/if}
 
     {#if selectedArrow}
       {@const arrow = data.arrows.find((a) => a.id === selectedArrow)}

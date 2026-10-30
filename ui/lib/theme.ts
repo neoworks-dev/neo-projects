@@ -1,12 +1,17 @@
 // Colours and the few styles everything shares, from the NeoWorks design system's dark theme:
 // warm greys, hairline borders, a white fill for the one main action, lake blue for selection and
 // focus. Colour only where it means something (a status, a label, a selection).
-import { themes } from "@neoworks/svelte-gpui-ui";
+import { setThemeMode, themes } from "@neoworks/svelte-gpui-ui";
 import type { Shadow, Style } from "@neoworks/svelte-gpui/ui";
 
 const t = themes.dark;
 
+// The design system's own components read the mode; the app is dark only.
+setThemeMode("dark");
+
 export const c = {
+  /** Behind the islands. */
+  frame: "#090908",
   bg: t.colors.canvas,
   dots: t.scales.grey[4],
   surface: t.colors.surface,
@@ -114,6 +119,15 @@ export const field: Style = {
 };
 
 export const fieldFocus: Style = { borderColor: c.accent };
+
+/** A project's own colour, from the design system's four landscape hues, picked by its name. */
+export function projectColor(name: string): { solid: string; soft: string; line: string; text: string } {
+  const hues = [t.scales.lake, t.scales.larch, t.scales.rock, t.scales.pine];
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const scale = hues[hash % hues.length];
+  return { solid: scale[9], soft: scale[3], line: scale[6], text: scale[11] };
+}
 
 /** The one main action: white on dark, as on neoworks.dev. */
 export const primary: Style = { ...button, background: c.fill, borderColor: c.fill, color: c.onFill, fontWeight: "medium" };
