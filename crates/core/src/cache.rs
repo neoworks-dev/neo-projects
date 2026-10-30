@@ -6,7 +6,8 @@ use serde_json::Value;
 use crate::Result;
 
 const SCHEMA: &str = include_str!("schema.sql");
-const VERSION: i64 = 1;
+const SCHEMA_V2: &str = include_str!("schema_v2.sql");
+const VERSION: i64 = 2;
 
 /// `cache.db`. One per workspace, owned by the window's Rust host.
 pub struct Cache {
@@ -27,8 +28,14 @@ impl Cache {
     fn init(conn: Connection) -> Result<Cache> {
         conn.pragma_update(None, "foreign_keys", true)?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version == 0 {
-            conn.execute_batch(SCHEMA)?;
+        if version == 0 || version == 1 {
+            // A version 1 database keeps its data; only the index tables are added.
+            let tx = conn.unchecked_transaction()?;
+            if version == 0 {
+                tx.execute_batch(SCHEMA)?;
+            }
+            tx.execute_batch(SCHEMA_V2)?;
+            tx.commit()?;
             conn.pragma_update(None, "user_version", VERSION)?;
         } else if version != VERSION {
             return Err(crate::Error::Other(format!("cache.db is version {version}, this build reads {VERSION}")));
@@ -124,9 +131,13 @@ pub struct Conflict {
 }
 
 pub(crate) fn now() -> String {
-    // RFC 3339 in UTC without a date library: seconds since the epoch, converted by hand.
     let secs =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    iso(secs)
+}
+
+/// RFC 3339 in UTC without a date library: seconds since the epoch, converted by hand.
+pub(crate) fn iso(secs: i64) -> String {
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
