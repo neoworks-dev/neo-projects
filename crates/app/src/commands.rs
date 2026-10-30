@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use np_core::github::{Client, Http};
-use np_core::workspace::{self, Uri, create_note, ensure_id, issues, read_note, write_body};
+use np_core::workspace::{
+    self, Uri, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
+};
 use rusqlite::OptionalExtension;
 use np_core::{Error, fields, views};
 use serde_json::{Map, Value, json};
@@ -185,6 +187,35 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         workspace::index_path(&ws, &open.cache(), &path).map_err(fail)?;
         Ok(Value::Null)
     });
+    // A property's value: null removes the key. The id is what links and canvases point at, so
+    // it can't be changed here.
+    command!("note_prop", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let path = ws.root().join(arg(&args, "path")?);
+        let key = arg(&args, "key")?;
+        if key == "id" {
+            return Err("The id can't be edited".into());
+        }
+        let value = Some(&args["value"]).filter(|value| !value.is_null());
+        open.wrote(&path);
+        set_prop(&path, key, value).map_err(fail)?;
+        workspace::index_path(&ws, &open.cache(), &path).map_err(fail)?;
+        note_json(&ws, &path)
+    });
+    command!("note_prop_rename", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let path = ws.root().join(arg(&args, "path")?);
+        let (from, to) = (arg(&args, "from")?, arg(&args, "to")?);
+        if from == "id" || to == "id" {
+            return Err("The id can't be edited".into());
+        }
+        open.wrote(&path);
+        rename_prop(&path, from, to).map_err(fail)?;
+        workspace::index_path(&ws, &open.cache(), &path).map_err(fail)?;
+        note_json(&ws, &path)
+    });
     command!("note_rename", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
         let ws = open.ws().clone();
@@ -313,7 +344,9 @@ fn unique(folder: &Path, stem: &str, ext: &str) -> PathBuf {
 fn note_json(ws: &workspace::Workspace, path: &Path) -> Answer {
     let note = read_note(path).map_err(fail)?;
     let uri = note.id.as_ref().map(|id| format!("note:{id}")).or_else(|| ws.uri_for_path(path).map(|u| u.to_string()));
-    Ok(json!({"path": rel(ws, path), "uri": uri, "title": note.title, "body": note.body}))
+    let props: Vec<Value> =
+        read_props(path).map_err(fail)?.into_iter().map(|(key, value)| json!({"key": key, "value": value})).collect();
+    Ok(json!({"path": rel(ws, path), "uri": uri, "title": note.title, "body": note.body, "props": props}))
 }
 
 /// Moves an issue to a board column: sets its Status (closing it for the done column, reopening

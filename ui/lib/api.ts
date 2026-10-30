@@ -187,6 +187,13 @@ export interface Note {
   uri: string;
   title: string;
   body: string;
+  /** The front matter, in the file's order. */
+  props: NoteProp[];
+}
+
+export interface NoteProp {
+  key: string;
+  value: unknown;
 }
 
 export interface SyncStatus {
@@ -242,6 +249,9 @@ export const api = {
   note: (path: string) => invoke<Note>("note_read", { path }),
   writeNote: (path: string, body: string) => invoke<null>("note_write", { path, body }),
   renameNote: (path: string, title: string) => invoke<Note>("note_rename", { path, title }),
+  /** Sets one front matter key; null removes it. */
+  setNoteProp: (path: string, key: string, value: unknown) => invoke<Note>("note_prop", { path, key, value }),
+  renameNoteProp: (path: string, from: string, to: string) => invoke<Note>("note_prop_rename", { path, from, to }),
   linkFiles: (paths: string[]) => invoke<CanvasNode[]>("files_link", { paths }),
   linkUrl: (url: string) => invoke<CanvasNode>("url_link", { url }),
   open: (target: string) => invoke<null>("open_external", { target }),

@@ -97,6 +97,29 @@ fn check_key(key: &str) -> Result<()> {
     Ok(())
 }
 
+/// The front matter's keys and values in the order the file lists them; empty when there is
+/// none or it doesn't parse. `Note::props` is sorted by key, which a properties list can't show.
+pub fn read_props(path: &Path) -> Result<Vec<(String, Value)>> {
+    let text = io(std::fs::read_to_string(path), path)?;
+    let Some(s) = split(&text) else { return Ok(Vec::new()) };
+    let Ok(serde_yaml_ng::Value::Mapping(map)) = serde_yaml_ng::from_str(&text[s.inner]) else {
+        return Ok(Vec::new());
+    };
+    let mut props = Vec::new();
+    for (key, value) in map {
+        let (Some(key), Ok(value)) = (key.as_str(), serde_json::to_value(value)) else { continue };
+        props.push((key.to_string(), value));
+    }
+    Ok(props)
+}
+
+/// Which of the block's lines sets the top-level `key`.
+fn key_line(lines: &[&str], key: &str) -> Option<usize> {
+    lines
+        .iter()
+        .position(|l| l.strip_prefix(key).is_some_and(|rest| rest.trim_start_matches([' ', '\t']).starts_with(':')))
+}
+
 /// A line that continues the value of the key above it.
 fn continues(line: &str) -> bool {
     line.starts_with([' ', '\t']) || line.starts_with("- ") || line.trim_end() == "-" || line.trim().is_empty()
@@ -114,10 +137,7 @@ fn edit(text: &str, key: &str, value: Option<&Value>) -> String {
     };
     let inner = &text[s.inner.clone()];
     let lines: Vec<&str> = inner.split_inclusive('\n').collect();
-    let at = lines
-        .iter()
-        .position(|l| l.strip_prefix(key).is_some_and(|rest| rest.trim_start_matches([' ', '\t']).starts_with(':')));
-    let (from, to) = match at {
+    let (from, to) = match key_line(&lines, key) {
         Some(i) => {
             let mut j = i + 1;
             while j < lines.len() && continues(lines[j]) {
@@ -158,6 +178,25 @@ pub fn set_prop(path: &Path, key: &str, value: Option<&Value>) -> Result<()> {
         atomic_write(path, out.as_bytes())?;
     }
     Ok(())
+}
+
+/// Renames the top-level key `from` to `to` on its line, keeping its value, a comment after it
+/// and every other byte. Refuses when `to` is already set.
+pub fn rename_prop(path: &Path, from: &str, to: &str) -> Result<()> {
+    check_key(to)?;
+    if from == to {
+        return Ok(());
+    }
+    let text = io(std::fs::read_to_string(path), path)?;
+    let Some(s) = split(&text) else { return Err(Error::Other(format!("{from:?} is not set"))) };
+    let lines: Vec<&str> = text[s.inner.clone()].split_inclusive('\n').collect();
+    if key_line(&lines, to).is_some() {
+        return Err(Error::Other(format!("{to:?} is already set")));
+    }
+    let Some(at) = key_line(&lines, from) else { return Err(Error::Other(format!("{from:?} is not set"))) };
+    let start = s.inner.start + lines[..at].iter().map(|l| l.len()).sum::<usize>();
+    let out = format!("{}{to}{}", &text[..start], &text[start + from.len()..]);
+    atomic_write(path, out.as_bytes())
 }
 
 /// The note's `id`, written as a new UUIDv7 first if it has none.
