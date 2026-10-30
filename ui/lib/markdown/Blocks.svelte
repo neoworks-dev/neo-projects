@@ -5,6 +5,8 @@
     size: number;
     /** The folder relative image paths are resolved against, or null. */
     base: string | null;
+    /** Where a relative image is looked for when it isn't in `base`, or null. */
+    workspace: string | null;
     onlink: (href: string) => void;
     /** A press on the text that isn't a link: the place to start editing. */
     onplain: () => void;
@@ -17,13 +19,14 @@
   // Markdown blocks drawn with the window's primitives: headings, paragraphs, lists and task
   // lists, quotes, code, tables, rules and images. Lists and quotes hold blocks of their own,
   // so this draws itself for them.
-  import { Icon, Image, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { Icon, Scroll, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Token, Tokens } from "marked";
   import { c, radii } from "../theme.ts";
   import Blocks from "./Blocks.svelte";
   import Code from "./Code.svelte";
   import Inline from "./Inline.svelte";
-  import { links, onlyImages, resolveSrc } from "./parse.ts";
+  import Picture from "./Picture.svelte";
+  import { images, links, onlyImages } from "./parse.ts";
   import { icons } from "../icons.ts";
   const { taskDone: checkSquare, taskOpen: square } = icons;
 
@@ -39,6 +42,16 @@
     else ctx.onplain();
   }
 </script>
+
+{#snippet pictureRow(pictures: Tokens.Image[])}
+  {#if pictures.length > 0}
+    <View style={{ direction: "row", wrap: true, gap: 8 }}>
+      {#each pictures as image, j (j)}
+        <Picture {image} {ctx} />
+      {/each}
+    </View>
+  {/if}
+{/snippet}
 
 {#each tokens as token, i (i)}
   {#if token.type === "heading"}
@@ -57,18 +70,10 @@
     {#if h.depth === 1}<View style={{ height: 1, background: c.border, marginTop: 2 }} />{/if}
   {:else if token.type === "paragraph"}
     {@const p = token as Tokens.Paragraph}
-    {@const images = onlyImages(p.tokens)}
-    {#if images}
-      <View style={{ direction: "row", wrap: true, gap: 8 }}>
-        {#each images as image, j (j)}
-          <Image
-            src={resolveSrc(image.href, ctx.base)}
-            fit="contain"
-            style={{ maxWidth: "full", maxHeight: 420, radius: radii.control, alignSelf: "start" }}
-          />
-        {/each}
-      </View>
-    {:else}
+    {@const gallery = onlyImages(p.tokens)}
+    <!-- Text can't hold a picture, so the images of a paragraph with words follow it. -->
+    {@const pictures = gallery ?? images(p.tokens)}
+    {#if !gallery}
       {#if ctx.interactive}
         <View onpress={() => press(p.tokens)}>
           <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} /></Text>
@@ -77,9 +82,11 @@
         <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={p.tokens} /></Text>
       {/if}
     {/if}
+    {@render pictureRow(pictures)}
   {:else if token.type === "text"}
     {@const t = token as Tokens.Text}
     <Text style={{ fontSize: ctx.size, lineHeight: line, color: c.text }}><Inline tokens={t.tokens ?? [t]} /></Text>
+    {@render pictureRow(images(t.tokens ?? []))}
   {:else if token.type === "list"}
     {@const list = token as Tokens.List}
     <View style={{ gap: tight || !list.loose ? 2 : ctx.size * 0.5 }}>

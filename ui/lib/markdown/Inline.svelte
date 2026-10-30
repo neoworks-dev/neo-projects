@@ -22,7 +22,7 @@
   {:else if token.type === "link"}
     <Text style={{ color: c.accentText, underline: true }}><Inline tokens={token.tokens ?? []} /></Text>
   {:else if token.type === "image"}
-    <Text style={{ color: c.faint }}>[{token.text || "image"}]</Text>
+    <!-- The block draws the picture after the text. -->
   {:else if token.type === "br"}
     <Text>{"\n"}</Text>
   {:else if token.type === "text" && "tokens" in token && token.tokens}

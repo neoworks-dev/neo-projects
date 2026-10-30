@@ -247,6 +247,32 @@ pub fn create_note(folder: &Path, title: &str, props: &Map<String, Value>) -> Re
     unreachable!()
 }
 
+/// Copies `source` into `folder` under its own name (`photo 2.png` when taken), for a note there
+/// to link. A file already in `folder` stays where it is. Returns the file's path in `folder`.
+pub fn attach_file(folder: &Path, source: &Path) -> Result<PathBuf> {
+    if source.parent() == Some(folder) {
+        return Ok(source.to_path_buf());
+    }
+    let Some(name) = source.file_name().map(Path::new) else {
+        return Err(Error::Other(format!("{} is not a file", source.display())));
+    };
+    let stem = name.file_stem().unwrap_or_default().to_string_lossy();
+    let extension = name.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    for n in 1.. {
+        let candidate = if n == 1 { format!("{stem}{extension}") } else { format!("{stem} {n}{extension}") };
+        let path = folder.join(candidate);
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(_) => {
+                io(std::fs::copy(source, &path), source)?;
+                return Ok(path);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(super::io_error(e, &path)),
+        }
+    }
+    unreachable!()
+}
+
 impl Workspace {
     /// Every `.md` file in the workspace as a note.
     pub fn notes(&self) -> Vec<Note> {

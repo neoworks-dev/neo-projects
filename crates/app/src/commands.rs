@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use np_core::github::{Client, Http};
 use np_core::workspace::{
-    self, Uri, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
+    self, Uri, attach_file, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
 };
 use rusqlite::OptionalExtension;
 use np_core::{Error, fields, views};
@@ -186,6 +186,19 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         write_body(&path, arg(&args, "body")?).map_err(fail)?;
         workspace::index_path(&ws, &open.cache(), &path).map_err(fail)?;
         Ok(Value::Null)
+    });
+    // A file dropped into a note, copied into the note's folder. Answers with the file's name,
+    // which is how the note links it.
+    command!("note_attach", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let note = ws.root().join(arg(&args, "path")?);
+        let Some(folder) = note.parent() else {
+            return Err("The note has no folder".into());
+        };
+        let attached = attach_file(folder, Path::new(arg(&args, "file")?)).map_err(fail)?;
+        open.wrote(&attached);
+        Ok(json!(attached.file_name().unwrap_or_default().to_string_lossy()))
     });
     // A property's value: null removes the key. The id is what links and canvases point at, so
     // it can't be changed here.
