@@ -131,9 +131,8 @@ pub fn expand(path: &Path) -> PathBuf {
 }
 
 fn state_file() -> PathBuf {
-    let config = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| expand(Path::new("~/.config")));
+    let config =
+        std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| expand(Path::new("~/.config")));
     config.join("neoworks-projects").join("state.json")
 }
 

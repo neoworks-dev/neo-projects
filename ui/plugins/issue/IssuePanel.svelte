@@ -381,7 +381,7 @@
           disabledStyle={{ opacity: 0.4 }}
           onpress={() => void send()}
         >
-          <Text style={{ color: "#fff" }}>Comment</Text>
+          <Text style={{ color: "#fff" }}>Send</Text>
         </Button>
       </View>
     </Scroll>

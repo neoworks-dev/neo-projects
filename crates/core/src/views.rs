@@ -228,10 +228,8 @@ pub fn repo_summary(conn: &Connection, repo: &str) -> Result<Value> {
         .filter(|c| c["fields"]["Status"].as_str().is_some_and(|s| s.eq_ignore_ascii_case("in progress")))
         .collect();
     in_progress.sort_by(|a, b| b["updated"].as_str().cmp(&a["updated"].as_str()));
-    let pulled: Option<String> = conn
-        .query_row("SELECT pulled_at FROM gh_repos WHERE node_id = ?1", [repo], |r| r.get(0))
-        .optional()?
-        .flatten();
+    let pulled: Option<String> =
+        conn.query_row("SELECT pulled_at FROM gh_repos WHERE node_id = ?1", [repo], |r| r.get(0)).optional()?.flatten();
     Ok(json!({
         "open": open,
         "closed": closed,
@@ -284,6 +282,7 @@ fn links(conn: &Connection, sql: &str, node: &str) -> Result<Vec<Value>> {
 }
 
 /// One issue with everything its panel shows and the choices its editors offer.
+#[allow(clippy::type_complexity)] // one row of eight columns, read once
 pub fn issue(conn: &Connection, node: &str) -> Result<Option<Value>> {
     let Some(mut detail) = card(conn, node)? else { return Ok(None) };
     let (body, author, created, milestone, issue_type, labels, assignees, fields): (
@@ -349,16 +348,10 @@ pub fn issue(conn: &Connection, node: &str) -> Result<Option<Value>> {
     detail["fieldDefs"] = json!(defs);
     detail["repoLabels"] = json!(repo_labels);
     detail["repoUsers"] = json!(users);
-    detail["blockedByList"] = json!(links(
-        conn,
-        "SELECT from_node FROM gh_links WHERE kind = 'blocks' AND to_node = ?1",
-        node
-    )?);
-    detail["blockingList"] = json!(links(
-        conn,
-        "SELECT to_node FROM gh_links WHERE kind = 'blocks' AND from_node = ?1",
-        node
-    )?);
+    detail["blockedByList"] =
+        json!(links(conn, "SELECT from_node FROM gh_links WHERE kind = 'blocks' AND to_node = ?1", node)?);
+    detail["blockingList"] =
+        json!(links(conn, "SELECT to_node FROM gh_links WHERE kind = 'blocks' AND from_node = ?1", node)?);
     detail["parent"] = match parent {
         Some(p) => linked(conn, &p)?,
         None => Value::Null,

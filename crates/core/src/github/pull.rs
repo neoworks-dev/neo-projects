@@ -33,10 +33,8 @@ const META_SECONDS: i64 = 15 * 60;
 /// own transaction, so an interrupted pull keeps what it got.
 pub fn pull<T: Transport>(cache: &mut Cache, client: &Client<T>, owner: &str, name: &str) -> Result<PullReport> {
     let key = format!("meta_at:{owner}/{name}");
-    let now_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+    let now_secs =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     let fresh: Option<String> = cache
         .conn
         .query_row("SELECT value FROM meta WHERE key = ?1", [&key], |r| r.get(0))

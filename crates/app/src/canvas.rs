@@ -104,7 +104,8 @@ pub fn overview(ws: &Workspace, cache: &Cache) -> Result<(PathBuf, Value)> {
             if let Some(id) = project["repoId"].as_str() {
                 repo_node.insert(id.to_string(), node.id.clone());
             }
-            v["item"] = json!({"kind": "project", "uri": format!("file:workspace/{}", rel(ws, &p.note)), "project": project});
+            v["item"] =
+                json!({"kind": "project", "uri": format!("file:workspace/{}", rel(ws, &p.note)), "project": project});
         } else {
             v["item"] = item(ws, cache, node)?;
         }
@@ -229,10 +230,7 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
 
 /// The GitHub issue a URL names, by the mirror: its node id.
 pub fn issue_by_url(cache: &Cache, url: &str) -> Result<Option<String>> {
-    Ok(cache
-        .conn()
-        .query_row("SELECT node_id FROM gh_issues WHERE url = ?1", [url], |r| r.get(0))
-        .optional()?)
+    Ok(cache.conn().query_row("SELECT node_id FROM gh_issues WHERE url = ?1", [url], |r| r.get(0)).optional()?)
 }
 
 /// What a node stands for, for the window to draw.
@@ -257,9 +255,12 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
                 return Ok(json!({"kind": "issue", "uri": url, "card": card}));
             }
             let host = url.split("//").nth(1).and_then(|r| r.split('/').next()).unwrap_or(&url).to_string();
-            let title = node.extra.get("title").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| {
-                url.split("//").nth(1).unwrap_or(&url).trim_end_matches('/').to_string()
-            });
+            let title = node
+                .extra
+                .get("title")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| url.split("//").nth(1).unwrap_or(&url).trim_end_matches('/').to_string());
             Ok(json!({"kind": "link", "uri": url, "title": title, "host": host}))
         }
         "file" => {

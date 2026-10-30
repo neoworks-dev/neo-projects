@@ -265,9 +265,8 @@
     <View
       style={{
         position: "absolute",
-        left: mid.x - (arrow.label ? 0 : 5),
+        left: mid.x - (arrow.label ? arrow.label.length * 3.1 + 7 : 5),
         top: mid.y - (arrow.label ? 10 : 5),
-        translate: arrow.label ? [-50, 0] : [0, 0],
         direction: "row",
       }}
       onpress={() => onselectarrow?.(chosen ? null : arrow.id)}

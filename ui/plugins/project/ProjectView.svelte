@@ -2,6 +2,7 @@
   // A project's canvas: its GitHub board as one region, and around it whatever you place: issues
   // dragged out of the board, notes, files, links, local boards. Arrows are relationships: between
   // two issues they can be blocks or sub-issues on GitHub; anything else is kept in the workspace.
+  import { window } from "@neoworks/svelte-gpui";
   import { Button, Input, Popover, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
@@ -98,6 +99,20 @@
       }
     }
     save(data.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)));
+  }
+
+  /** Zooms and pans so every node is in view, below the toolbar. */
+  function fit() {
+    if (nodes.length === 0) return;
+    const width = window.size.width - (app.selection ? 460 : 0);
+    const height = window.size.height - 44;
+    const left = Math.min(...nodes.map((n) => n.x));
+    const top = Math.min(...nodes.map((n) => n.y));
+    const right = Math.max(...nodes.map((n) => n.x + n.w));
+    const bottom = Math.max(...nodes.map((n) => n.y + n.h));
+    const pad = 40;
+    const zoom = Math.min(1.2, (width - 2 * pad) / (right - left), (height - 2 * pad - 50) / (bottom - top));
+    view = { x: left - pad / zoom, y: top - (pad + 50) / zoom, zoom };
   }
 
   /** A press selects (and shows the handle for drawing an arrow); a double press opens. */
@@ -274,8 +289,8 @@
       >
         <Text>+ Notes board</Text>
       </Button>
-      <Button style={ghost} hover={ghostHover} onpress={() => (view = { x: -40, y: -60, zoom: 0.9 })}>
-        <Text>Reset view</Text>
+      <Button style={ghost} hover={ghostHover} onpress={fit}>
+        <Text>Fit</Text>
       </Button>
     </View>
 

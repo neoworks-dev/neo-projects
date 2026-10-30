@@ -205,7 +205,9 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         };
         open.wrote(&path);
         workspace::write_board(&path, &board).map_err(fail)?;
-        Ok(json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 900, "height": 520}))
+        Ok(
+            json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 900, "height": 520}),
+        )
     });
     command!("board_move", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
@@ -251,8 +253,10 @@ fn node_id() -> String {
 
 /// A title made safe as a file name.
 fn sanitize(title: &str) -> String {
-    let clean: String =
-        title.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '-' } else { c }).collect();
+    let clean: String = title
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '-' } else { c })
+        .collect();
     let clean = clean.trim().trim_matches('.').to_string();
     if clean.is_empty() { "Untitled".into() } else { clean }
 }
@@ -355,7 +359,8 @@ fn unrelate(open: &Open, arrow: &Value) -> np_core::Result<()> {
             let mut cache = open.cache();
             if arrow["type"] == "blocks" {
                 let blocked = fields::read(cache.conn(), to, "blockedBy")?;
-                let rest: Vec<Value> = blocked.as_array().into_iter().flatten().filter(|b| *b != from).cloned().collect();
+                let rest: Vec<Value> =
+                    blocked.as_array().into_iter().flatten().filter(|b| *b != from).cloned().collect();
                 cache.set_field(to, "blockedBy", json!(rest))?;
             } else {
                 cache.set_field(to, "parent", Value::Null)?;
@@ -397,7 +402,8 @@ fn link_files(open: &Open, paths: &[PathBuf]) -> np_core::Result<Value> {
             None => {
                 let dir = path.parent().unwrap_or(Path::new("/"));
                 let base = dir.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or("files".into());
-                let base: String = base.chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' }).collect();
+                let base: String =
+                    base.chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' }).collect();
                 let mut name = base.clone();
                 let mut n = 2;
                 while ws.roots().iter().any(|(r, _)| *r == name) {

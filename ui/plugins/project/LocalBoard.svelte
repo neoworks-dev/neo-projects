@@ -62,7 +62,7 @@
         over={{ background: c.accentSoft }}
       >
         <View style={{ direction: "row", align: "center", gap: s(6), paddingX: s(4), height: s(24) }}>
-          <Text style={{ fontSize: s(12), fontWeight: "semibold", truncate: true }}>{column.label}</Text>
+          <Text style={{ fontSize: s(12), fontWeight: "semibold", nowrap: true }}>{column.label}</Text>
           <Text style={{ fontSize: s(11), color: c.faint }}>{column.notes.length}</Text>
           <View style={{ flex: 1 }} />
           <Button
