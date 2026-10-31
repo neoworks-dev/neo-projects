@@ -592,12 +592,13 @@
 
   /**
    * How small a node can be resized, so its title stays readable: sticky notes, notes, issue
-   * cards, web links and folders resize, the rest keep their size.
+   * cards, web links, folders and images resize, the rest keep their size.
    */
   function minSize(n: Placed): { w: number; h: number } | null {
     // An unfolded folder's nodes are laid out in rows; their size is the folder canvas's.
     if (n.raw.in) return null;
     if (n.raw.type === "text") return { w: 120, h: 80 };
+    if (n.raw.item?.kind === "image") return { w: 48, h: 48 };
     if (n.raw.item?.kind === "note") return { w: 160, h: 90 };
     if (n.raw.item?.kind === "issue") return { w: 200, h: 96 };
     if (n.raw.item?.kind === "link") return { w: 200, h: 72 };
@@ -905,6 +906,7 @@
       {selectedArrow}
       linkable
       {minSize}
+      keepsAspect={(n) => n.raw.item?.kind === "image"}
       onresized={resizedNode}
       onselect={(ids) => (selected = ids)}
       onbackground={fold}

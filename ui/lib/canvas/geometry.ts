@@ -125,36 +125,30 @@ export function midpoint(points: Point[]): Point {
   return points[points.length - 1];
 }
 
-/** Where a node is grabbed to resize it: a side or a corner, by compass point. */
-export type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+/** Where a node is grabbed to resize it: a corner, by compass point. */
+export type Handle = "ne" | "nw" | "se" | "sw";
 
-/** Sides first, so the corners are laid over their ends and win where they meet. */
-export const handles: Handle[] = ["n", "e", "s", "w", "nw", "ne", "se", "sw"];
+export const handles: Handle[] = ["nw", "ne", "se", "sw"];
 
-/** How thick a side's grab strip is and how large a corner's square, in screen pixels. */
-const EDGE = 8;
+/** The cursor over a corner and while dragging it: a diagonal arrow along the way it resizes. */
+export function handleCursor(handle: Handle): "nwse-resize" | "nesw-resize" {
+  if (handle === "nw" || handle === "se") return "nwse-resize";
+  return "nesw-resize";
+}
+
+/** How large a corner's grab square is, in screen pixels. */
 const CORNER = 16;
 
 /**
- * The invisible area that grabs `handle` of `r` drawn at `zoom`, in screen pixels: a strip
- * along a side or a square on a corner, half inside the node and half outside.
+ * The invisible square that grabs `handle` of `r` drawn at `zoom`, in screen pixels, half
+ * inside the node and half outside.
  */
 export function grabZone(r: Rect, handle: Handle, zoom: number): Rect {
-  const left = r.x * zoom;
-  const top = r.y * zoom;
-  const right = (r.x + r.w) * zoom;
-  const bottom = (r.y + r.h) * zoom;
-  if (handle.length === 2) {
-    const x = handle.includes("w") ? left : right;
-    const y = handle.includes("n") ? top : bottom;
-    return { x: x - CORNER / 2, y: y - CORNER / 2, w: CORNER, h: CORNER };
-  }
-  if (handle === "n" || handle === "s") {
-    const y = handle === "n" ? top : bottom;
-    return { x: left, y: y - EDGE / 2, w: right - left, h: EDGE };
-  }
-  const x = handle === "w" ? left : right;
-  return { x: x - EDGE / 2, y: top, w: EDGE, h: bottom - top };
+  let x = (r.x + r.w) * zoom;
+  if (handle.includes("w")) x = r.x * zoom;
+  let y = (r.y + r.h) * zoom;
+  if (handle.includes("n")) y = r.y * zoom;
+  return { x: x - CORNER / 2, y: y - CORNER / 2, w: CORNER, h: CORNER };
 }
 
 export type Side = "n" | "e" | "s" | "w";
@@ -177,16 +171,26 @@ export function contain(w: number, h: number, aspect: number): { w: number; h: n
   return { w, h: w / aspect };
 }
 
-/** The side of `r` that `at` is closest to, inside or outside it. */
-export function nearestSide(r: Rect, at: Point): Side {
-  const distances: [Side, number][] = [
-    ["n", Math.abs(at.y - r.y)],
-    ["e", Math.abs(at.x - (r.x + r.w))],
-    ["s", Math.abs(at.y - (r.y + r.h))],
-    ["w", Math.abs(at.x - r.x)],
-  ];
-  distances.sort((a, b) => a[1] - b[1]);
-  return distances[0][0];
+const sides: Side[] = ["n", "e", "s", "w"];
+
+/**
+ * The side of `r` whose arrow dot (`out` past its middle) the pointer at `at` is within `reach`
+ * of, all in screen pixels; the nearest when several are, or null. The side `kept`, whose dot is
+ * already out, holds on to the pointer up to `keep`, so the dot doesn't flicker at the edge of
+ * its reach.
+ */
+export function dotSide(r: Rect, at: Point, zoom: number, out: number, reach: number, keep: number, kept: Side | null): Side | null {
+  let found: Side | null = null;
+  let nearest = Infinity;
+  for (const side of sides) {
+    const dot = dotPoint(r, side, zoom, out).at;
+    const distance = Math.hypot(dot.x - at.x, dot.y - at.y);
+    if (distance <= (side === kept ? keep : reach) && distance < nearest) {
+      found = side;
+      nearest = distance;
+    }
+  }
+  return found;
 }
 
 /** The topmost of `nodes` (the last drawn) within `margin` of `at`, or null. */
@@ -200,25 +204,18 @@ export function near<R extends Rect>(nodes: R[], at: Point, margin: number): R |
 }
 
 /**
- * `start` after dragging its `handle` by `dx`, `dy`: the opposite side or corner stays where it
- * was, and the size stays at least `min`. With `keepAspect` (Shift held) the proportions of
- * `start` are kept, the larger of the two changes deciding the size.
+ * `start` after dragging its `handle` by `dx`, `dy`: the opposite corner stays where it was, and
+ * the size stays at least `min`. With `keepAspect` the proportions of `start` are kept, the
+ * larger of the two changes deciding the size.
  */
 export function resized(start: Rect, handle: Handle, dx: number, dy: number, min: { w: number; h: number }, keepAspect: boolean): Rect {
-  let w = start.w;
-  if (handle.includes("e")) w = start.w + dx;
+  let w = start.w + dx;
   if (handle.includes("w")) w = start.w - dx;
-  let h = start.h;
-  if (handle.includes("s")) h = start.h + dy;
+  let h = start.h + dy;
   if (handle.includes("n")) h = start.h - dy;
 
   if (keepAspect) {
-    const sideways = handle === "e" || handle === "w";
-    const upright = handle === "n" || handle === "s";
-    let scale = Math.max(w / start.w, h / start.h);
-    if (sideways) scale = w / start.w;
-    if (upright) scale = h / start.h;
-    scale = Math.max(scale, min.w / start.w, min.h / start.h);
+    const scale = Math.max(w / start.w, h / start.h, min.w / start.w, min.h / start.h);
     w = start.w * scale;
     h = start.h * scale;
   }

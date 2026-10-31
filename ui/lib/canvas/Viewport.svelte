@@ -47,8 +47,8 @@
   // on the background draws a stroke or erases the strokes it crosses. Drag the background to select the nodes in a box (Shift adds to the selection),
   // drag it with the middle or right button or turn the wheel to pan, Ctrl+wheel to zoom. Press a
   // node to select it, Shift+press to add or take it out. Drag a node to move it with the rest of
-  // the selection, or its sides and corners to resize it. Near a node, a dot slides out past the
-  // edge nearest the pointer; drag it onto another node to connect them, from every selected node
+  // the selection, or its corners to resize it. Near the middle of a node's edge, a dot
+  // slides out past it; drag it onto another node to connect them, from every selected node
   // when it is one of them. Files from other programs and in-app drags (a card from a board) can be
   // dropped anywhere.
   import {
@@ -69,11 +69,12 @@
     arrowPath,
     contains,
     dotPoint,
+    dotSide,
     grabZone,
+    handleCursor,
     handles,
     midpoint,
     near,
-    nearestSide,
     resized,
     spanned,
     touches,
@@ -106,6 +107,8 @@
     linkable?: boolean;
     /** The smallest a node can be resized to, or null when it can't be resized. */
     minSize?: (node: N) => { w: number; h: number } | null;
+    /** Whether a node keeps its proportions when resized; the others keep them with Shift. */
+    keepsAspect?: (node: N) => boolean;
     onresized?: (id: string, rect: Rect) => void;
     /** The nodes to select now, after a press, a Shift+press or a box on the background. */
     onselect?: (ids: string[]) => void;
@@ -150,6 +153,7 @@
     movable = () => true,
     linkable = false,
     minSize = () => null,
+    keepsAspect = () => false,
     onresized,
     onselect,
     onbackground,
@@ -210,15 +214,18 @@
   const ERASER = 8;
   let pointer: Point | null = null;
 
-  /** How close the pointer comes to a node, in screen pixels, before its arrow dot shows. */
+  /** How close the pointer comes to a node, in screen pixels, before it has its resize handles. */
   const NEAR = 20;
   /** How far the dot slides out past the node's edge, in screen pixels. */
   const DOT_OUT = 16;
+  /** How close the pointer comes to where a dot sits before it slides out, and how far it may go before it slides back. */
+  const DOT_REACH = 28;
+  const DOT_KEEP = 44;
   /**
-   * The node the pointer is near and the side it is nearest. The arrow dot is out on that side,
-   * and the node has its resize handles.
+   * The node the pointer is near, which has its resize handles, and the side whose arrow dot is
+   * out, if the pointer is close to one.
    */
-  let nearby = $state<{ id: string; side: Side } | null>(null);
+  let nearby = $state<{ id: string; side: Side | null } | null>(null);
   /** The pointer is on the dot's grab area, so a press there starts an arrow. */
   let dotHot = $state(false);
 
@@ -231,7 +238,9 @@
       dotHot = false;
       return;
     }
-    const side = nearestSide(found, at);
+    let kept: Side | null = null;
+    if (nearby?.id === found.id) kept = nearby.side;
+    const side = dotSide(found, { x: at.x * zoom, y: at.y * zoom }, zoom, DOT_OUT, DOT_REACH, DOT_KEEP, kept);
     if (nearby?.id === found.id && nearby.side === side) return;
     // A dot taken away under the pointer never hears it leave.
     nearby = { id: found.id, side };
@@ -255,6 +264,14 @@
 
   /** A node being resized by one of its handles: its box when it started, and as it is now. */
   let resize = $state<{ id: string; handle: Handle; start: Rect; from: Point; rect: Rect } | null>(null);
+
+  /** The background's cursor, which also shows while a resize runs ahead of its corner. */
+  const backgroundCursor = $derived.by(() => {
+    if (panning) return "grabbing";
+    if (resize) return handleCursor(resize.handle);
+    if (tool) return "crosshair";
+    return "default";
+  });
 
   function placed(n: N): N {
     const start = drag?.starts.get(n.id);
@@ -574,7 +591,6 @@
   }
 
   function resizeDown(n: N, handle: Handle, e: PointerEvent) {
-    if (e.button !== 0) return;
     const start = { x: n.x, y: n.y, w: n.w, h: n.h };
     resize = { id: n.id, handle, start, from: { x: e.windowX, y: e.windowY }, rect: start };
   }
@@ -582,12 +598,13 @@
   function resizeMove(n: N, e: PointerEvent) {
     const min = minSize(n);
     if (!resize || !min) return;
-    const { windowX, windowY, shift } = e;
+    const { windowX, windowY } = e;
+    const keepAspect = e.shift || keepsAspect(n);
     later(() => {
       if (!resize) return;
       const dx = (windowX - resize.from.x) / zoom;
       const dy = (windowY - resize.from.y) / zoom;
-      resize = { ...resize, rect: resized(resize.start, resize.handle, dx, dy, min, shift) };
+      resize = { ...resize, rect: resized(resize.start, resize.handle, dx, dy, min, keepAspect) };
     });
   }
 
@@ -641,7 +658,7 @@
 >
   <DropTarget {accept} ondrop={dropped} style={{ position: "absolute", inset: 0 }}>
     <View
-      style={{ position: "absolute", inset: 0, background: c.bg, cursor: panning ? "grabbing" : tool ? "crosshair" : "default" }}
+      style={{ position: "absolute", inset: 0, background: c.bg, cursor: backgroundCursor }}
       ondown={backgroundDown}
       onmove={backgroundMove}
       onup={backgroundUp}
@@ -700,8 +717,8 @@
       </AtScreenSize>
     {/each}
     {#each visible as n (n.id)}
-      {#if linkable && nearby?.id === n.id && !drag && !resize}
-        <!-- The dot for drawing an arrow, on the side nearest the pointer, drawn before the node
+      {#if linkable && nearby?.id === n.id && nearby.side && !drag && !resize}
+        <!-- The dot for drawing an arrow, on the side the pointer came close to, drawn before the node
              so it slides out from under that edge. Keyed by side: moving to another side slides
              this one back in and the next one out. Its grab area is larger than the dot, and the
              dot fills while the pointer is on it. -->
@@ -744,19 +761,19 @@
         {@render node(n, zoom)}
       </View>
       {#if minSize(n) && (nearby?.id === n.id || resize?.id === n.id)}
-        <!-- Invisible strips on the sides and squares on the corners: dragging there resizes. Only
-             the node the pointer is near has them, since their screen size changes with every
-             zoom step. -->
+        <!-- Invisible squares on the corners: dragging there resizes. Only the node the pointer is
+             near has them, since their screen size changes with every zoom step. -->
         {#each handles as handle (handle)}
           {@const zone = grabZone(n, handle, zoom)}
           <View
+            buttons={["left"]}
             style={{
               position: "absolute",
               left: zone.x / zoom,
               top: zone.y / zoom,
               width: zone.w / zoom,
               height: zone.h / zoom,
-              cursor: handle.length === 2 ? "default" : handle === "e" || handle === "w" ? "col-resize" : "row-resize",
+              cursor: handleCursor(handle),
             }}
             ondown={(e) => resizeDown(n, handle, e)}
             onmove={(e) => resizeMove(n, e)}
