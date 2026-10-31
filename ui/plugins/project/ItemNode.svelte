@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Everything on a project canvas that isn't the board: a note (a card), an image, a file, a web
-  // link, an issue placed off the board, a local board. Drawn at `zoom`.
+  // Everything on a project canvas that isn't the board: a note (a card), an image, a file (a PDF
+  // or video with its poster), a web link, an issue placed off the board, a local board. Drawn at
+  // `zoom`.
   import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
@@ -8,9 +9,13 @@
   import { c, ring } from "../../lib/theme.ts";
   import LocalBoard from "./LocalBoard.svelte";
   import { icons } from "../../lib/icons.ts";
-  const { fileText } = icons;
+  import { duration, pages } from "../../lib/media.ts";
+  import { contain } from "../../lib/canvas/geometry.ts";
+  const { fileText, play } = icons;
 
-  let { item, zoom, selected }: { item: Item; zoom: number; selected: boolean } = $props();
+  // `width` and `height` are the node's, in world units.
+  let { item, zoom, selected, width, height }: { item: Item; zoom: number; selected: boolean; width: number; height: number } =
+    $props();
 
   const s = (n: number) => n * zoom;
   const excerpt = $derived(item.kind === "note" ? plainText(item.excerpt, 240) : "");
@@ -53,6 +58,43 @@
     {#if zoom >= 0.5}
       <Text style={{ fontSize: s(11), color: c.muted, padding: [s(4), s(8)], truncate: true }}>{item.title}</Text>
     {/if}
+  </View>
+{:else if item.kind === "file" && item.media?.poster}
+  {@const media = item.media}
+  {@const pdf = item.mime === "application/pdf"}
+  {@const fitted = contain(width, height, media.posterAspect ?? (pdf ? 0.707 : 16 / 9))}
+  {@const corner = pdf ? s(3) : s(8)}
+  {@const badge = pdf && media.pages !== null ? pages(media.pages) : media.duration !== null ? duration(media.duration) : null}
+  <!-- The page or the frame itself, at its own proportions inside the node, and nothing around
+       it. GPUI rounds an image as drawn, so the image fills a box of exactly its shape. -->
+  <View style={{ flex: 1, align: "center", justify: "center" }}>
+    <View
+      style={{
+        width: s(fitted.w),
+        height: s(fitted.h),
+        radius: corner,
+        borderWidth: 1,
+        borderColor: selected ? c.accent : c.border,
+        shadow: selected ? ring : null,
+        align: "center",
+        justify: "center",
+        transition: 140,
+      }}
+    >
+      <Image src={item.media.poster} fit="fill" style={{ position: "absolute", inset: 0, radius: corner - 1 }} />
+      {#if !pdf}
+        <View style={{ size: s(40), radius: s(20), background: "#000000a0", align: "center", justify: "center" }}>
+          <Icon svg={play} size={s(18)} color="#fff" />
+        </View>
+      {/if}
+      {#if badge && zoom >= 0.45}
+        <Text
+          style={{ position: "absolute", right: s(8), bottom: s(8), fontSize: s(10.5), color: "#fff", background: "#000000a0", radius: s(4), paddingX: s(5), paddingY: s(2) }}
+        >
+          {badge}
+        </Text>
+      {/if}
+    </View>
   </View>
 {:else if item.kind === "file"}
   <View style={{ ...frame, direction: "row", align: "center", gap: s(10), padding: s(12) }}>

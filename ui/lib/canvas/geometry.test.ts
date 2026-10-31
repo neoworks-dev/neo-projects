@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { arrowPath, dotPoint, gapBetween, grabZone, midpoint, near, nearestSide, resized } from "./geometry.ts";
+import { arrowPath, contain, dotPoint, gapBetween, grabZone, midpoint, near, nearestSide, resized } from "./geometry.ts";
 
 const box = (x: number, y: number) => ({ x, y, w: 100, h: 60 });
 
@@ -69,6 +69,12 @@ test("arrow dots sit past the middle of each side and tuck back under it", () =>
   expect(dotPoint(r, "e", 1, 14)).toEqual({ at: { x: 124, y: 50 }, back: { x: -14, y: 0 } });
   expect(dotPoint(r, "s", 1, 14)).toEqual({ at: { x: 60, y: 94 }, back: { x: 0, y: -14 } });
   expect(dotPoint(r, "w", 1, 14)).toEqual({ at: { x: -4, y: 50 }, back: { x: 14, y: 0 } });
+});
+
+test("contain fits the proportions inside the box, touching two sides", () => {
+  expect(contain(240, 340, 0.5)).toEqual({ w: 170, h: 340 });
+  expect(contain(320, 230, 16 / 9)).toEqual({ w: 320, h: 180 });
+  expect(contain(200, 100, 2)).toEqual({ w: 200, h: 100 });
 });
 
 test("the nearest side is the closest edge, from inside or outside", () => {

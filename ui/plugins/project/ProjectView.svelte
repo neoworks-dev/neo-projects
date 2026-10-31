@@ -378,7 +378,7 @@
             ondone={() => (editing = null)}
           />
         {:else if n.raw.item}
-          <ItemNode item={n.raw.item} {zoom} selected={selected === n.id} />
+          <ItemNode item={n.raw.item} {zoom} selected={selected === n.id} width={n.w} height={n.h} />
         {/if}
       {/snippet}
     </Viewport>

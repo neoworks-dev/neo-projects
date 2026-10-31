@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use np_core::media::{self, Media};
 use np_core::previews::{self, Preview};
 use np_core::views;
 use np_core::workspace::{self, Canvas, Node, Project, Uri, Workspace, issues, read_canvas, read_note, write_canvas};
@@ -340,7 +341,23 @@ fn file_item(ws: &Workspace, uri: Option<String>, path: Option<PathBuf>) -> Valu
         return json!({"kind": "image", "uri": uri, "path": path, "title": title});
     }
     let name = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-    json!({"kind": "file", "uri": uri, "path": path, "title": name, "mime": mime})
+    let mut file = json!({"kind": "file", "uri": uri, "path": path, "title": name, "mime": mime});
+    if let Some(made) = media::get(&crate::previews::dir(ws), &path) {
+        file["media"] = media_json(ws, made);
+    }
+    file
+}
+
+/// A PDF's or video's preview for the window: the poster as an absolute path with its width
+/// divided by its height, and the page count or length. A failed one has no poster.
+fn media_json(ws: &Workspace, made: Media) -> Value {
+    let poster = made.poster.map(|f| crate::previews::dir(ws).join(f));
+    json!({
+        "posterAspect": poster.as_deref().and_then(aspect),
+        "poster": poster.map(|p| p.to_string_lossy().into_owned()),
+        "pages": made.pages,
+        "duration": made.duration,
+    })
 }
 
 fn local_board(ws: &Workspace, path: &Path) -> Result<Value> {

@@ -93,7 +93,7 @@ export interface CanvasNode {
 export type Item =
   | { kind: "note"; uri: string | null; path: string; abs: string; title: string; excerpt: string }
   | { kind: "image"; uri: string | null; path: string; title: string }
-  | { kind: "file"; uri: string | null; path: string; title: string; mime: string | null }
+  | { kind: "file"; uri: string | null; path: string; title: string; mime: string | null; media?: FileMedia }
   | { kind: "issue"; uri: string; card: Card }
   | { kind: "link"; uri: string; title: string; host: string; preview?: LinkPreview }
   | { kind: "board"; uri: string }
@@ -112,6 +112,16 @@ export interface LinkPreview {
   /** The image's width divided by its height, when it could be read. */
   imageAspect: number | null;
   favicon: string | null;
+}
+
+/** A PDF's or video's preview, made by the host. No poster when it couldn't be made. */
+export interface FileMedia {
+  poster: string | null;
+  /** The poster's width divided by its height. */
+  posterAspect: number | null;
+  pages: number | null;
+  /** In seconds. */
+  duration: number | null;
 }
 
 export interface LocalColumn {

@@ -161,6 +161,12 @@ export function dotPoint(r: Rect, side: Side, zoom: number, out: number): { at: 
   return { at: { x: (r.x + r.w) * zoom + out, y: middle.y }, back: { x: -out, y: 0 } };
 }
 
+/** The largest size of the proportions `aspect` (width divided by height) that fits `w`×`h`. */
+export function contain(w: number, h: number, aspect: number): { w: number; h: number } {
+  if (w / h > aspect) return { w: h * aspect, h };
+  return { w, h: w / aspect };
+}
+
 /** The side of `r` that `at` is closest to, inside or outside it. */
 export function nearestSide(r: Rect, at: Point): Side {
   const distances: [Side, number][] = [

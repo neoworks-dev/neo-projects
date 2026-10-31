@@ -38,6 +38,7 @@ import minus from "@phosphor-icons/core/regular/minus.svg";
 import noteBlank from "@phosphor-icons/core/regular/note-blank.svg";
 import notePencil from "@phosphor-icons/core/regular/note-pencil.svg";
 import paperPlaneRight from "@phosphor-icons/core/regular/paper-plane-right.svg";
+import playFill from "@phosphor-icons/core/fill/play-fill.svg";
 import plus from "@phosphor-icons/core/regular/plus.svg";
 import prohibit from "@phosphor-icons/core/regular/prohibit.svg";
 import prohibitInset from "@phosphor-icons/core/fill/prohibit-inset-fill.svg";
@@ -108,6 +109,8 @@ export const icons = {
   filePdf,
   fileImage,
   fileVideo,
+  /** On a video's poster. */
+  play: playFill,
   fileAudio,
   fileArchive: fileZip,
   fileCode,

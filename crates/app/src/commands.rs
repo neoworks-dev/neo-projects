@@ -9,7 +9,7 @@ use np_core::workspace::{
     self, Uri, attach_file, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
 };
 use rusqlite::OptionalExtension;
-use np_core::{Error, fields, views};
+use np_core::{Error, fields, media, views};
 use serde_json::{Map, Value, json};
 use svelte_gpui::{CommandError, Commands};
 
@@ -526,8 +526,13 @@ fn link_files(open: &Open, paths: &[PathBuf]) -> np_core::Result<Value> {
         let path = expand(path);
         let offset = i as f64 * 30.0;
         let image = workspace::mime_for(&path).starts_with("image/");
+        // A PDF's poster is a page, upright; a video's a frame, wide.
         let (w, h) = if image {
             (360.0, 260.0)
+        } else if media::kind(&path) == Some(media::Kind::Pdf) {
+            (240.0, 340.0)
+        } else if media::kind(&path) == Some(media::Kind::Video) {
+            (320.0, 180.0)
         } else if path.extension().is_some_and(|e| e == "md") {
             (300.0, 200.0)
         } else {
