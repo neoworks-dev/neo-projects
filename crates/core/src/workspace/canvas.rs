@@ -79,6 +79,36 @@ pub struct Edge {
     pub extra: Map<String, Value>,
 }
 
+/// A line drawn freehand on the canvas's background, kept under the canvas's own `neoworks`
+/// object. `points` runs x, y, x, y, … in canvas coordinates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Stroke {
+    pub id: String,
+    pub color: String,
+    pub width: f64,
+    pub points: Vec<f64>,
+}
+
+impl Canvas {
+    /// The strokes drawn on the background; a stroke that doesn't read is left out.
+    pub fn strokes(&self) -> Vec<Stroke> {
+        let Some(list) = self.extra.get("neoworks").and_then(|n| n.get("strokes")).and_then(Value::as_array) else {
+            return Vec::new();
+        };
+        list.iter().filter_map(|s| serde_json::from_value(s.clone()).ok()).collect()
+    }
+
+    /// Replaces the strokes, keeping whatever else is under `neoworks`.
+    pub fn set_strokes(&mut self, strokes: &[Stroke]) -> Result<()> {
+        let hints = self.extra.entry("neoworks").or_insert_with(|| Value::Object(Map::new()));
+        if !hints.is_object() {
+            *hints = Value::Object(Map::new());
+        }
+        hints["strokes"] = serde_json::to_value(strokes)?;
+        Ok(())
+    }
+}
+
 impl Node {
     /// Our hint object on the node, if any.
     pub fn neoworks(&self) -> Option<&Map<String, Value>> {

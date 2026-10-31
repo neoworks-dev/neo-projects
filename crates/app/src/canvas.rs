@@ -10,8 +10,8 @@ use np_core::media::{self, Media};
 use np_core::previews::{self, Preview};
 use np_core::views;
 use np_core::workspace::{
-    self, Canvas, Node, Project, Uri, Workspace, folder_canvas_path, folder_of, issues, read_canvas, read_note,
-    write_canvas,
+    self, Canvas, Node, Project, Stroke, Uri, Workspace, folder_canvas_path, folder_of, issues, read_canvas,
+    read_note, write_canvas,
 };
 use np_core::{Cache, Error, Result};
 use rusqlite::OptionalExtension;
@@ -262,7 +262,22 @@ pub fn project_view(
     let arrows = arrows(ws, cache, &with_inner)?;
     let mut project = project_json(ws, cache, &project)?;
     project["repoId"] = json!(repo_id);
-    Ok(json!({"path": rel(ws, &path), "project": project, "board": board, "nodes": nodes, "arrows": arrows}))
+    let strokes = canvas.strokes();
+    Ok(json!({
+        "path": rel(ws, &path),
+        "project": project,
+        "board": board,
+        "nodes": nodes,
+        "arrows": arrows,
+        "strokes": strokes,
+    }))
+}
+
+/// Replaces the strokes drawn on the background of the canvas at `path`.
+pub fn save_strokes(path: &Path, strokes: &[Stroke]) -> Result<()> {
+    let mut canvas = load(path)?;
+    canvas.set_strokes(strokes)?;
+    write_canvas(path, &canvas)
 }
 
 /// The GitHub issue a URL names, by the mirror: its node id.

@@ -69,6 +69,15 @@ nodes with their URL. Extras go under `"neoworks": {…}` (e.g. the edge's relat
 A folder is a directory in the project with a canvas inside named after it, and a `file` node
 pointing at that canvas: `Garden/Seeds/Seeds.canvas`. The folder's canvas has no board.
 
+Lines drawn on the background go under the canvas's own `neoworks` object, which other JSON
+Canvas apps keep but don't draw. `points` runs x, y, x, y, … in canvas coordinates:
+
+```json
+"neoworks": {
+  "strokes": [{ "id": "de2c83b106e7b", "color": "#f85149", "width": 2.5, "points": [0, 0, 12.5, 4] }]
+}
+```
+
 ## `.board`
 
 ```yaml

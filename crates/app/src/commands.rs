@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use np_core::github::{Client, Http};
 use np_core::workspace::{
-    self, Uri, attach_file, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
+    self, Stroke, Uri, attach_file, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
 };
 use rusqlite::OptionalExtension;
 use np_core::{Error, fields, media, views};
@@ -115,6 +115,14 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         let nodes = args["nodes"].as_array().cloned().unwrap_or_default();
         open.wrote(&path);
         canvas::save(&ws, &open.cache(), &path, &nodes).map_err(fail)?;
+        Ok(Value::Null)
+    });
+    command!("canvas_strokes", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let path = open.ws().root().join(arg(&args, "path")?);
+        let strokes: Vec<Stroke> = serde_json::from_value(args["strokes"].clone()).map_err(|e| e.to_string())?;
+        open.wrote(&path);
+        canvas::save_strokes(&path, &strokes).map_err(fail)?;
         Ok(Value::Null)
     });
     command!("issue", |app: &App, args: Value| {

@@ -169,6 +169,15 @@ export interface Overview extends CanvasView {
 export interface ProjectView extends CanvasView {
   project: Project;
   board: Board;
+  strokes: Stroke[];
+}
+
+/** A line drawn freehand on a canvas's background; `points` runs x, y, x, y, … in canvas coordinates. */
+export interface Stroke {
+  id: string;
+  color: string;
+  width: number;
+  points: number[];
 }
 
 export interface Comment {
@@ -284,6 +293,7 @@ export const api = {
   createProject: (name: string, repo: string | null) => invoke<Project>("project_create", { name, repo }),
   githubRepos: () => invoke<GithubRepo[]>("github_repos"),
   saveCanvas: (path: string, nodes: CanvasNode[]) => invoke<null>("canvas_save", { path, nodes }),
+  saveStrokes: (path: string, strokes: Stroke[]) => invoke<null>("canvas_strokes", { path, strokes }),
   issue: (node: string) => invoke<IssueDetail | null>("issue", { node }),
   search: (query: string) => invoke<Card[]>("issue_search", { query }),
   setField: (node: string, field: string, value: unknown) => invoke<null>("set_field", { node, field, value }),
