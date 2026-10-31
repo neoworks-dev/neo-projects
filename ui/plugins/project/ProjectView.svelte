@@ -8,6 +8,7 @@
   import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
   import { glide } from "../../lib/canvas/motion.ts";
+  import { bounds, unfoldLayout } from "../../lib/canvas/unfold.ts";
   import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
@@ -58,13 +59,19 @@
     { icon: icons.folder, label: "Folder", onpress: () => void newFolder() },
   ];
 
+  /** The folder whose contents are laid out beside it, by its node's id. */
+  let unfolded = $state<string | null>(null);
+  /** The node being dragged onto a folder, and the folder it would go into if let go now. */
+  let dropping = $state<{ node: string; folder: string } | null>(null);
+
   $effect(() => {
     void app.version;
     const f = folder;
     const i = inside;
+    const u = unfolded;
     void app.run(async () => {
-      const next = await app.api.projectView(f, i);
-      if (f === folder && i === inside) data = next;
+      const next = await app.api.projectView(f, i, u ? [u] : []);
+      if (f === folder && i === inside && u === unfolded) data = next;
     });
   });
 
@@ -77,9 +84,34 @@
     raw: CanvasNode;
   }
 
-  const nodes = $derived<Placed[]>(
-    (data?.nodes ?? []).map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.width, h: n.height, raw: n })),
-  );
+  /** What a node is called, for sorting an unfolded folder's rows. */
+  function nameOf(n: CanvasNode): string {
+    const item = n.item;
+    if (item?.kind === "issue") return item.card.title;
+    if (item && "title" in item && item.title) return item.title;
+    return n.text ?? "";
+  }
+
+  // The canvas's own nodes where they are, then the unfolded folder's in rows beside it. The
+  // folder's nodes stay until the host's next answer, so folding hides them at once.
+  const nodes = $derived.by<Placed[]>(() => {
+    const all = data?.nodes ?? [];
+    const own = all
+      .filter((n) => !n.in)
+      .map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.width, h: n.height, raw: n }));
+    const folderNode = own.find((n) => n.id === unfolded);
+    if (!folderNode) return own;
+    const inner = all.filter((n) => n.in?.folder === unfolded);
+    const spots = unfoldLayout(
+      folderNode,
+      inner.map((n) => ({ id: n.id, kind: n.item?.kind ?? n.type, title: nameOf(n), w: n.width, h: n.height })),
+    );
+    const laid = inner.map((n) => {
+      const spot = spots.get(n.id) ?? { x: n.x, y: n.y };
+      return { id: n.id, x: spot.x, y: spot.y, w: n.width, h: n.height, raw: n };
+    });
+    return [...own, ...laid];
+  });
   const boardNode = $derived(nodes.find((n) => n.raw.item?.kind === "board"));
   const arrows = $derived(
     (data?.arrows ?? []).map((a) => ({ ...a, color: a.type === "blocks" ? "#f2555a99" : undefined })),
@@ -99,15 +131,19 @@
     return counts;
   });
 
-  /** Writes the canvas. A node the host hasn't described yet (just added) needs a reload. */
+  /**
+   * Writes the canvas, without an unfolded folder's nodes, which live on the folder's. A node the
+   * host hasn't described yet (just added) needs a reload.
+   */
   function save(next: CanvasNode[]) {
     if (!data) return;
     data = { ...data, nodes: next };
     const path = data.path;
-    const fresh = next.some((n) => !n.item);
+    const own = next.filter((n) => !n.in);
+    const fresh = own.some((n) => !n.item);
     void app.run(async () => {
-      await app.api.saveCanvas(path, next);
-      if (fresh || next.length !== nodes.length) app.version++;
+      await app.api.saveCanvas(path, own);
+      if (fresh || own.length !== nodes.filter((n) => !n.raw.in).length) app.version++;
     });
   }
 
@@ -130,31 +166,71 @@
     return Math.random().toString(16).slice(2, 18);
   }
 
+  /** The folder under `centre` that the node `id` would go into, other than itself. */
+  function folderAt(id: string, centre: Point): { id: string; canvas: string } | null {
+    for (const n of nodes) {
+      const item = n.raw.item;
+      if (n.id !== id && item?.kind === "folder" && contains(n, centre)) return { id: n.id, canvas: item.canvas };
+    }
+    return null;
+  }
+
+  function dragging(id: string, x: number, y: number) {
+    const node = nodes.find((n) => n.id === id);
+    if (!node) return;
+    const into = folderAt(id, { x: x + node.w / 2, y: y + node.h / 2 });
+    if (into) dropping = { node: id, folder: into.id };
+    else dropping = null;
+  }
+
   function moved(id: string, x: number, y: number) {
+    dropping = null;
     if (!data) return;
     const node = data.nodes.find((n) => n.id === id);
     if (!node) return;
     const centre = { x: x + node.width / 2, y: y + node.height / 2 };
+    if (node.in) {
+      movedFromFolder(node, node.in, x, y, centre);
+      return;
+    }
     // An issue dropped back on the board leaves the canvas and returns to its column.
     if (node.item?.kind === "issue" && boardNode && contains(boardNode, centre)) {
       save(data.nodes.filter((n) => n.id !== id));
       return;
     }
-    const into = nodes.find((n) => n.id !== id && n.raw.item?.kind === "folder" && contains(n, centre))?.raw.item;
-    if (into?.kind === "folder") {
-      void putInFolder(id, into.path);
+    const into = folderAt(id, centre);
+    if (into) {
+      void moveNode(id, data.path, id, into.canvas);
       return;
     }
     save(data.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)));
   }
 
-  /** Moves a node into a folder. The host answers with a change, which reloads the canvas. */
-  async function putInFolder(id: string, dir: string) {
+  /**
+   * A node of the unfolded folder let go: onto another folder it goes there, among its folder's
+   * rows it goes back to its place, and anywhere else onto this canvas where it was let go.
+   */
+  function movedFromFolder(node: CanvasNode, from: NonNullable<CanvasNode["in"]>, x: number, y: number, centre: Point) {
     if (!data) return;
-    const path = data.path;
-    data = { ...data, nodes: data.nodes.filter((n) => n.id !== id) };
+    const into = folderAt(node.id, centre);
+    if (into) {
+      if (into.canvas !== from.canvas) void moveNode(node.id, from.canvas, from.id, into.canvas);
+      return;
+    }
+    const area = bounds(nodes.filter((n) => n.raw.in?.folder === from.folder || n.id === from.folder));
+    if (area && contains(area, centre)) return;
+    void moveNode(node.id, from.canvas, from.id, data.path, [x, y]);
+  }
+
+  /**
+   * Moves the node shown as `shown`, `id` on the canvas `from`, onto the canvas `into`. The host
+   * moves its file too when it sits beside `from`, and the reload shows where it went.
+   */
+  async function moveNode(shown: string, from: string, id: string, into: string, at?: [number, number]) {
+    if (!data) return;
+    data = { ...data, nodes: data.nodes.filter((n) => n.id !== shown) };
     selected = null;
-    await app.run(() => app.api.putInFolder(path, id, dir));
+    await app.run(() => app.api.putInFolder(from, id, into, at));
     app.version++;
   }
 
@@ -170,6 +246,8 @@
    * cards and web links resize, the rest keep their size.
    */
   function minSize(n: Placed): { w: number; h: number } | null {
+    // An unfolded folder's nodes are laid out in rows; their size is the folder canvas's.
+    if (n.raw.in) return null;
     if (n.raw.type === "text") return { w: 120, h: 80 };
     if (n.raw.item?.kind === "note") return { w: 160, h: 90 };
     if (n.raw.item?.kind === "issue") return { w: 200, h: 96 };
@@ -195,14 +273,28 @@
     glide(view, { x: left - pad / zoom, y: top - pad / zoom, zoom }, (next) => (view = next));
   }
 
-  /** A press selects (and shows the handle for drawing an arrow); a double press opens. */
+  /**
+   * A press selects (and shows the handle for drawing an arrow); a double press opens. A press on
+   * the background folds the unfolded folder.
+   */
   function select(id: string | null) {
     selected = id;
+    if (id === null) unfolded = null;
+  }
+
+  /** A press on a folder of this canvas unfolds it, and folds it again. */
+  function pressed(id: string) {
+    const node = data?.nodes.find((n) => n.id === id);
+    if (node?.item?.kind !== "folder" || node.in) return;
+    if (unfolded === id) unfolded = null;
+    else unfolded = id;
   }
 
   function open(id: string) {
     selected = id;
-    if (data?.nodes.find((n) => n.id === id)?.type === "text") {
+    const node = data?.nodes.find((n) => n.id === id);
+    // A sticky note in a folder is written on the folder's canvas.
+    if (node?.type === "text" && !node.in) {
       editing = id;
       return;
     }
@@ -351,7 +443,8 @@
     }
     if (selected) {
       const node = data.nodes.find((n) => n.id === selected);
-      if (!node || node.item?.kind === "board") return false;
+      // An unfolded folder's node lives on the folder's canvas, and is removed there.
+      if (!node || node.item?.kind === "board" || node.in) return false;
       selected = null;
       app.select(null);
       save(data.nodes.filter((n) => n.id !== node.id));
@@ -391,27 +484,40 @@
       onopen={open}
       onselectarrow={(id) => (selectedArrow = id)}
       onmoved={moved}
+      ondrag={dragging}
+      onpress={pressed}
       onconnect={(from, to) => (connecting = { from, to })}
       onfiles={(paths, at) => void files(paths, at)}
       accept={(d) => isCard(d) || isFileDrag(d)}
       ondropdata={dropped}
     >
       {#snippet node(n, zoom)}
-        {#if n.raw.item?.kind === "board"}
-          <BoardNode board={data!.board} project={data!.project} {zoom} {placed} />
-        {:else if n.raw.type === "text"}
-          <StickyNote
-            text={n.raw.text ?? ""}
-            color={n.raw.color}
-            {zoom}
-            selected={selected === n.id}
-            editing={editing === n.id}
-            onchange={(text) => setText(n.id, text)}
-            ondone={() => (editing = null)}
-          />
-        {:else if n.raw.item}
-          <ItemNode item={n.raw.item} {zoom} selected={selected === n.id} width={n.w} height={n.h} />
-        {/if}
+        <!-- Held over a folder, a node lets the folder show through. -->
+        <View style={{ flex: 1, opacity: dropping?.node === n.id ? 0.45 : 1, transition: 120 }}>
+          {#if n.raw.item?.kind === "board"}
+            <BoardNode board={data!.board} project={data!.project} {zoom} {placed} />
+          {:else if n.raw.type === "text"}
+            <StickyNote
+              text={n.raw.text ?? ""}
+              color={n.raw.color}
+              {zoom}
+              selected={selected === n.id}
+              editing={editing === n.id}
+              onchange={(text) => setText(n.id, text)}
+              ondone={() => (editing = null)}
+            />
+          {:else if n.raw.item}
+            <ItemNode
+              item={n.raw.item}
+              {zoom}
+              selected={selected === n.id}
+              width={n.w}
+              height={n.h}
+              open={unfolded === n.id}
+              target={dropping?.folder === n.id}
+            />
+          {/if}
+        </View>
       {/snippet}
     </Viewport>
 
@@ -427,7 +533,7 @@
       </Presence>
     {/if}
 
-    {#if selectedNode?.type === "text" && editing !== selectedNode.id}
+    {#if selectedNode?.type === "text" && !selectedNode.in && editing !== selectedNode.id}
       {@const sticky = selectedNode}
       <Presence
         in={[fly, { y: 10, duration: 180 }]}

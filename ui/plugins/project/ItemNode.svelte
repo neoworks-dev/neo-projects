@@ -14,8 +14,17 @@
   import { fileIcon } from "../../lib/fileIcons.ts";
   const { fileText, play } = icons;
 
-  // `width` and `height` are the node's, in world units.
-  let { item, zoom, selected, width, height }: { item: Item; zoom: number; selected: boolean; width: number; height: number } =
+  // `width` and `height` are the node's, in world units. `open` is a folder unfolded beside it,
+  // `target` one that a dragged node would go into.
+  let {
+    item,
+    zoom,
+    selected,
+    width,
+    height,
+    open = false,
+    target = false,
+  }: { item: Item; zoom: number; selected: boolean; width: number; height: number; open?: boolean; target?: boolean } =
     $props();
 
   const s = (n: number) => n * zoom;
@@ -142,8 +151,19 @@
     </View>
   </View>
 {:else if item.kind === "folder"}
-  <View style={{ ...frame, direction: "row", align: "center", gap: s(10), paddingX: s(14) }} hover={{ borderColor: selected ? c.accent : c.borderStrong }}>
-    <Image src={fileIcon(item.title, true)} style={{ size: s(26), shrink: 0 }} />
+  <View
+    style={{
+      ...frame,
+      direction: "row",
+      align: "center",
+      gap: s(10),
+      paddingX: s(14),
+      background: target ? c.accentSoft : c.surface,
+      borderColor: selected || target ? c.accent : open ? c.borderStrong : c.border,
+    }}
+    hover={{ borderColor: selected || target ? c.accent : c.borderStrong }}
+  >
+    <Image src={fileIcon(item.title, true, open)} style={{ size: s(26), shrink: 0 }} />
     <View style={{ flex: 1, minWidth: 0, gap: s(2) }}>
       <Text style={{ fontSize: s(13.5), truncate: true }}>{item.title}</Text>
       {#if zoom >= 0.45}

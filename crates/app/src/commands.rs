@@ -56,8 +56,10 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         let ws = open.ws().clone();
         let project = canvas::find_project(&ws, arg(&args, "project")?).map_err(fail)?;
         let inside = args["inside"].as_str();
+        let unfolded: Vec<String> =
+            args["unfolded"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
         open.wrote(&canvas::view_canvas_path(&ws, &project, inside).map_err(fail)?);
-        let view = canvas::project_view(&ws, &open.cache(), arg(&args, "project")?, inside).map_err(fail)?;
+        let view = canvas::project_view(&ws, &open.cache(), arg(&args, "project")?, inside, &unfolded).map_err(fail)?;
         open.previews.want_view(&view);
         Ok(view)
     });
@@ -72,12 +74,18 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         workspace::write_canvas(&path, &workspace::Canvas::default()).map_err(fail)?;
         Ok(json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 220, "height": 64}))
     });
-    // The node `node` of the canvas `canvas` dropped on the folder `dir` (both workspace-relative).
+    // The node `node` of the canvas `from` moved onto the canvas `into` (both workspace-relative):
+    // into a folder, or out of one. `at` is where it goes, `[x, y]`, or where there is room.
     command!("folder_put", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
         let root = open.ws().root().to_path_buf();
-        let from = root.join(arg(&args, "canvas")?);
-        folders::put(&open, &from, arg(&args, "node")?, &root.join(arg(&args, "dir")?)).map_err(fail)?;
+        let from = root.join(arg(&args, "from")?);
+        let into = root.join(arg(&args, "into")?);
+        let at = match (args["at"][0].as_f64(), args["at"][1].as_f64()) {
+            (Some(x), Some(y)) => Some((x, y)),
+            _ => None,
+        };
+        folders::put(&open, &from, arg(&args, "node")?, &into, at).map_err(fail)?;
         app.emitter.emit("changed", json!({"reason": "folder"}));
         Ok(Value::Null)
     });

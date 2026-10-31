@@ -8,10 +8,10 @@ use np_core::workspace::folders;
 
 use crate::state::Open;
 
-/// Moves the node `id` from the canvas at `from` onto the canvas of the folder `dir`.
-pub fn put(open: &Open, from: &Path, id: &str, dir: &Path) -> Result<()> {
+/// Moves the node `id` from the canvas at `from` onto the canvas at `into`, at `at` if given.
+pub fn put(open: &Open, from: &Path, id: &str, into: &Path, at: Option<(f64, f64)>) -> Result<()> {
     let ws = open.ws().clone();
-    let touched = folders::put(&ws, &open.cache(), from, id, dir)?;
+    let touched = folders::put(&ws, &open.cache(), from, id, into, at)?;
     wrote(open, &touched);
     Ok(())
 }

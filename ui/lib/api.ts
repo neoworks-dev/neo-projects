@@ -86,6 +86,8 @@ export interface CanvasNode {
   color?: string;
   neoworks?: Record<string, unknown>;
   item?: Item;
+  /** On a node of an unfolded folder: the folder's node, its canvas, and the node's id there. */
+  in?: { folder: string; canvas: string; id: string };
   [key: string]: unknown;
 }
 
@@ -99,7 +101,7 @@ export type Item =
   | { kind: "board"; uri: string }
   | { kind: "localboard"; uri: string; path: string; title: string; groupBy: string; columns: LocalColumn[] }
   /** A directory of the project with a canvas inside; `path` is the directory's, `count` its canvas's nodes. */
-  | { kind: "folder"; uri: string | null; path: string; title: string; count: number }
+  | { kind: "folder"; uri: string | null; path: string; canvas: string; title: string; count: number }
   | { kind: "project"; uri: string; project: Project }
   | { kind: "text"; uri: null; text: string | null }
   | { kind: "group"; uri: null; title: string | null }
@@ -256,11 +258,19 @@ export const api = {
   workspace: () => invoke<{ path: string | null }>("workspace"),
   openWorkspace: (path: string) => invoke<{ path: string }>("workspace_open", { path }),
   overview: () => invoke<Overview>("overview"),
-  /** A project's canvas, or with `inside` (a folder's directory) that folder's. */
-  projectView: (project: string, inside?: string) => invoke<ProjectView>("project_view", { project, inside }),
+  /**
+   * A project's canvas, or with `inside` (a folder's directory) that folder's. The folders whose
+   * node ids are `unfolded` bring their nodes along.
+   */
+  projectView: (project: string, inside?: string, unfolded: string[] = []) =>
+    invoke<ProjectView>("project_view", { project, inside, unfolded }),
   createFolder: (dir: string, name: string) => invoke<CanvasNode>("folder_create", { dir, name }),
-  /** Moves a node of `canvas` into the folder `dir`, and its file with it when it sits beside the canvas. */
-  putInFolder: (canvas: string, node: string, dir: string) => invoke<null>("folder_put", { canvas, node, dir }),
+  /**
+   * Moves a node of the canvas `from` onto the canvas `into`, into a folder or out of one, and its
+   * file with it when it sits beside `from`. `at` places it; without, it goes where there is room.
+   */
+  putInFolder: (from: string, node: string, into: string, at?: [number, number]) =>
+    invoke<null>("folder_put", { from, node, into, at }),
   /** Answers with the folder's new directory. */
   renameFolder: (dir: string, name: string) => invoke<string>("folder_rename", { dir, name }),
   createProject: (name: string, repo: string | null) => invoke<Project>("project_create", { name, repo }),

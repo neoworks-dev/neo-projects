@@ -163,10 +163,19 @@ pub fn view_canvas_path(ws: &Workspace, project: &Project, inside: Option<&str>)
     Ok(folder_canvas_path(&dir))
 }
 
-/// A project's canvas with its board, the board's issues minus those placed on the canvas, and
-/// the arrows between what is placed. Inside one of its folders, that folder's canvas, which has
-/// no board.
-pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str, inside: Option<&str>) -> Result<Value> {
+/// A project's canvas with its board, the board's issues minus those placed on the canvas or in
+/// its folders, and the arrows between what is placed. Inside one of its folders, that folder's
+/// canvas, which has no board.
+///
+/// The folders whose node ids are in `unfolded` bring their nodes along, each with the id
+/// `<folder node id>/<its id>` and an `in` saying where it lives; arrows reach them too.
+pub fn project_view(
+    ws: &Workspace,
+    cache: &Cache,
+    folder: &str,
+    inside: Option<&str>,
+    unfolded: &[String],
+) -> Result<Value> {
     let project = find_project(ws, folder)?;
     let path = view_canvas_path(ws, &project, inside)?;
     let mut canvas = load(&path)?;
@@ -211,17 +220,37 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str, inside: Option<
         write_canvas(&path, &canvas)?;
     }
     let mut nodes = Vec::new();
-    let mut placed_issues = HashSet::new();
+    let mut inner = Vec::new();
+    let mut with_inner = canvas.clone();
     for node in &canvas.nodes {
         let mut v = serde_json::to_value(node)?;
-        let it = item(ws, cache, node)?;
-        if it["kind"] == "issue"
-            && let Some(id) = it["card"]["node"].as_str()
+        v["item"] = item(ws, cache, node)?;
+        nodes.push(v);
+        let Some(inner_canvas) = node.file.as_ref().map(|f| ws.root().join(f)).filter(|p| folder_of(p).is_some()) else {
+            continue;
+        };
+        for child in load(&inner_canvas)?.nodes {
+            let mut v = serde_json::to_value(&child)?;
+            v["item"] = item(ws, cache, &child)?;
+            if !unfolded.contains(&node.id) {
+                // Only for the board: an issue in a folder is placed, folded or not.
+                inner.push(v);
+                continue;
+            }
+            let id = format!("{}/{}", node.id, child.id);
+            v["in"] = json!({"folder": node.id, "canvas": rel(ws, &inner_canvas), "id": child.id});
+            v["id"] = json!(id);
+            with_inner.nodes.push(Node { id, ..child });
+            nodes.push(v);
+        }
+    }
+    let mut placed_issues = HashSet::new();
+    for v in nodes.iter().chain(&inner) {
+        if v["item"]["kind"] == "issue"
+            && let Some(id) = v["item"]["card"]["node"].as_str()
         {
             placed_issues.insert(id.to_string());
         }
-        v["item"] = it;
-        nodes.push(v);
     }
     if let Some(columns) = board["columns"].as_array_mut() {
         for column in columns {
@@ -230,7 +259,7 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str, inside: Option<
             }
         }
     }
-    let arrows = arrows(ws, cache, &canvas)?;
+    let arrows = arrows(ws, cache, &with_inner)?;
     let mut project = project_json(ws, cache, &project)?;
     project["repoId"] = json!(repo_id);
     Ok(json!({"path": rel(ws, &path), "project": project, "board": board, "nodes": nodes, "arrows": arrows}))
@@ -325,7 +354,7 @@ fn folder_item(ws: &Workspace, uri: Option<String>, dir: &Path, canvas_path: &Pa
     }
     let count = load(canvas_path).map(|c| c.nodes.len()).unwrap_or(0);
     let name = dir.file_name().unwrap_or_default().to_string_lossy();
-    json!({"kind": "folder", "uri": uri, "path": rel(ws, dir), "title": name, "count": count})
+    json!({"kind": "folder", "uri": uri, "path": rel(ws, dir), "canvas": rel(ws, canvas_path), "title": name, "count": count})
 }
 
 /// The card of the local issue a file is, if it is one.

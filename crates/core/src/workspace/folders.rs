@@ -1,7 +1,7 @@
 //! Folders on a project canvas: a directory with a canvas of its own inside, named after it (see
 //! [`folder_canvas_path`]). A file or folder that sits directly in the directory of the canvas it
-//! is dropped from moves into the folder on disk; anything else (a link, an issue, a file from
-//! elsewhere) moves only its node.
+//! is taken from moves on disk into the directory of the canvas it goes to; anything else (a
+//! link, an issue, a file from elsewhere) moves only its node.
 //!
 //! Each change answers with the files it wrote, so the window can tell its own writes from the
 //! watcher's.
@@ -11,8 +11,12 @@ use std::path::{Path, PathBuf};
 use super::{Canvas, Workspace, folder_canvas_path, folder_of, read_canvas, rename_path, write_canvas};
 use crate::{Cache, Error, Result};
 
-/// Moves the node `id` from the canvas at `from` onto the canvas of the folder `dir`.
-pub fn put(ws: &Workspace, cache: &Cache, from: &Path, id: &str, dir: &Path) -> Result<Vec<PathBuf>> {
+/// Moves the node `id` from the canvas at `from` onto the canvas at `into`: a folder's, or back
+/// out onto the canvas around it. `at` places it; without, it goes where there is room.
+pub fn put(ws: &Workspace, cache: &Cache, from: &Path, id: &str, into: &Path, at: Option<(f64, f64)>) -> Result<Vec<PathBuf>> {
+    let Some(dir) = into.parent() else {
+        return Err(Error::Other(format!("{} has no folder", ws.rel(into))));
+    };
     let mut source = read_canvas(from)?;
     let Some(index) = source.nodes.iter().position(|n| n.id == id) else {
         return Err(Error::Other(format!("no node {id} on {}", ws.rel(from))));
@@ -44,12 +48,14 @@ pub fn put(ws: &Workspace, cache: &Cache, from: &Path, id: &str, dir: &Path) -> 
         node.file = Some(ws.rel(&moved));
     }
 
-    let into = folder_canvas_path(dir);
-    let mut canvas = if into.exists() { read_canvas(&into)? } else { Canvas::default() };
-    (node.x, node.y) = canvas.free_spot(node.width, node.height);
+    let mut canvas = if into.exists() { read_canvas(into)? } else { Canvas::default() };
+    (node.x, node.y) = match at {
+        Some(at) => at,
+        None => canvas.free_spot(node.width, node.height),
+    };
     canvas.nodes.push(node);
-    write_canvas(&into, &canvas)?;
-    touched.push(into);
+    write_canvas(into, &canvas)?;
+    touched.push(into.to_path_buf());
     Ok(touched)
 }
 

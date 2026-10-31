@@ -18,6 +18,8 @@ fn only_a_canvas_named_after_its_directory_is_a_folder() {
     assert_eq!(folder_of(Path::new("/ws/Garden/Seeds/Seeds.md")), None);
 }
 
+const SEEDS: &str = "Garden/Seeds/Seeds.canvas";
+
 fn file_node(id: &str, file: &str) -> Node {
     serde_json::from_value(json!({"id": id, "type": "file", "file": file, "x": 0, "y": 0, "width": 280, "height": 80}))
         .unwrap()
@@ -67,7 +69,7 @@ fn a_file_beside_the_canvas_moves_into_the_folder_on_disk() {
     write_canvas(&root.join("Elsewhere.canvas"), &Canvas { nodes: vec![file_node("x", "Garden/data.csv")], ..Default::default() })
         .unwrap();
 
-    folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "data", &root.join("Garden/Seeds")).unwrap();
+    folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "data", &root.join(SEEDS), None).unwrap();
 
     assert!(!root.join("Garden/data.csv").exists());
     assert!(root.join("Garden/Seeds/data.csv").exists());
@@ -77,13 +79,27 @@ fn a_file_beside_the_canvas_moves_into_the_folder_on_disk() {
 }
 
 #[test]
+fn a_file_taken_out_of_a_folder_goes_back_beside_the_canvas_where_it_was_dropped() {
+    let (_dir, ws, cache) = garden();
+    let root = ws.root().to_path_buf();
+    let garden = root.join("Garden/Garden.canvas");
+    folders::put(&ws, &cache, &garden, "data", &root.join(SEEDS), None).unwrap();
+
+    folders::put(&ws, &cache, &root.join(SEEDS), "data", &garden, Some((120.0, -40.0))).unwrap();
+
+    assert!(root.join("Garden/data.csv").exists());
+    assert!(files(&ws, SEEDS).is_empty());
+    let node = read_canvas(&garden).unwrap().nodes.into_iter().find(|n| n.id == "data").unwrap();
+    assert_eq!((node.file.as_deref(), node.x, node.y), (Some("Garden/data.csv"), 120.0, -40.0));
+}
+
+#[test]
 fn links_files_from_elsewhere_and_the_projects_note_move_only_their_nodes() {
     let (_dir, ws, cache) = garden();
     let root = ws.root().to_path_buf();
     let from = root.join("Garden/Garden.canvas");
-    let seeds = root.join("Garden/Seeds");
     for id in ["link", "main", "note"] {
-        folders::put(&ws, &cache, &from, id, &seeds).unwrap();
+        folders::put(&ws, &cache, &from, id, &root.join(SEEDS), None).unwrap();
     }
 
     assert!(root.join("Garden/src/main.rs").exists());
@@ -97,13 +113,13 @@ fn a_folder_moves_into_another_with_what_it_holds() {
     let (_dir, ws, cache) = garden();
     let root = ws.root().to_path_buf();
     let from = root.join("Garden/Garden.canvas");
-    folders::put(&ws, &cache, &from, "data", &root.join("Garden/Seeds")).unwrap();
+    folders::put(&ws, &cache, &from, "data", &root.join(SEEDS), None).unwrap();
     std::fs::create_dir(root.join("Garden/Beds")).unwrap();
     let mut canvas = read_canvas(&from).unwrap();
     canvas.nodes.push(file_node("beds", "Garden/Beds/Beds.canvas"));
     write_canvas(&from, &canvas).unwrap();
 
-    folders::put(&ws, &cache, &from, "seeds", &root.join("Garden/Beds")).unwrap();
+    folders::put(&ws, &cache, &from, "seeds", &root.join("Garden/Beds/Beds.canvas"), None).unwrap();
 
     assert!(root.join("Garden/Beds/Seeds/data.csv").exists());
     assert_eq!(files(&ws, "Garden/Beds/Beds.canvas"), ["Garden/Beds/Seeds/Seeds.canvas"]);
@@ -115,7 +131,7 @@ fn a_folder_cant_go_into_itself_and_nothing_changes() {
     let (_dir, ws, cache) = garden();
     let root = ws.root().to_path_buf();
     let before = files(&ws, "Garden/Garden.canvas");
-    let put = folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "seeds", &root.join("Garden/Seeds"));
+    let put = folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "seeds", &root.join(SEEDS), None);
     assert!(put.is_err());
     assert_eq!(files(&ws, "Garden/Garden.canvas"), before);
 }
@@ -125,7 +141,7 @@ fn a_name_taken_in_the_folder_is_refused() {
     let (_dir, ws, cache) = garden();
     let root = ws.root().to_path_buf();
     std::fs::write(root.join("Garden/Seeds/data.csv"), "older\n").unwrap();
-    let put = folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "data", &root.join("Garden/Seeds"));
+    let put = folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "data", &root.join(SEEDS), None);
     assert!(put.is_err());
     assert_eq!(std::fs::read_to_string(root.join("Garden/Seeds/data.csv")).unwrap(), "older\n");
     assert!(root.join("Garden/data.csv").exists());
@@ -135,7 +151,7 @@ fn a_name_taken_in_the_folder_is_refused() {
 fn renaming_a_folder_renames_its_canvas_and_what_names_them() {
     let (_dir, ws, cache) = garden();
     let root = ws.root().to_path_buf();
-    folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "data", &root.join("Garden/Seeds")).unwrap();
+    folders::put(&ws, &cache, &root.join("Garden/Garden.canvas"), "data", &root.join(SEEDS), None).unwrap();
 
     let (to, _) = folders::rename(&ws, &cache, &root.join("Garden/Seeds"), "Seedlings").unwrap();
 
