@@ -93,9 +93,10 @@
           {item.preview?.site ?? item.host}
         </Text>
       </View>
-      <Text style={{ fontSize: s(13), maxLines: 2 }}>{item.preview?.title ?? item.title}</Text>
+      <!-- Titles and descriptions often hold a URL or a repository path longer than the card. -->
+      <Text style={{ fontSize: s(13), maxLines: 2, overflowWrap: "anywhere" }}>{item.preview?.title ?? item.title}</Text>
       {#if item.preview?.description && zoom >= 0.45}
-        <Text style={{ fontSize: s(11.5), color: c.muted, lineHeight: s(16), maxLines: 2 }}>
+        <Text style={{ fontSize: s(11.5), color: c.muted, lineHeight: s(16), maxLines: 2, overflowWrap: "anywhere" }}>
           {item.preview.description}
         </Text>
       {/if}
