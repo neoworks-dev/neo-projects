@@ -21,8 +21,11 @@
 
   const s = (n: number) => n * zoom;
   const closed = $derived(card.state === "CLOSED");
-  const state = $derived(stateIcon(card));
+  const stateMark = $derived(stateIcon(card));
   const excerpt = $derived(fill ? plainText(card.excerpt ?? "", 320) : "");
+  /** The height left for the excerpt in a filled card, and how many of its lines fit there. */
+  let excerptRoom = $state(0);
+  const excerptLines = $derived(Math.min(4, Math.floor(excerptRoom / s(17.5))));
   const priority = $derived(card.fields.Priority as string | undefined);
   const priorityColor: Record<string, string> = {
     Urgent: tones.PINK,
@@ -51,8 +54,8 @@
   {#if zoom < 0.45}
     <Text style={{ fontSize: s(26), color: c.text, fontWeight: "medium", maxLines: 3 }}>{card.title}</Text>
   {:else}
-    <View style={{ direction: "row", align: "center", gap: s(6) }}>
-      <Icon svg={state.icon} size={s(14)} color={state.color} />
+    <View style={{ direction: "row", align: "center", gap: s(6), shrink: 0 }}>
+      <Icon svg={stateMark.icon} size={s(14)} color={stateMark.color} />
       <Text style={{ fontSize: s(11), color: c.muted, nowrap: true }}>
         {showRepo ? card.repoName : ""}{card.number ? `#${card.number}` : "new"}
       </Text>
@@ -69,13 +72,17 @@
         <View style={{ width: s(6), height: s(6), radius: s(3), background: c.warn }} />
       {/if}
     </View>
-    <Text style={{ fontSize: s(13), color: c.text, lineHeight: s(18), maxLines: 3 }}>{card.title}</Text>
-    {#if fill && excerpt}
-      <Text style={{ fontSize: s(12), color: c.muted, lineHeight: s(17.5), maxLines: 4 }}>{excerpt}</Text>
-      <View style={{ flex: 1 }} />
+    <Text style={{ fontSize: s(13), color: c.text, lineHeight: s(18), maxLines: fill ? 2 : 3, shrink: 0 }}>{card.title}</Text>
+    {#if fill}
+      <!-- The excerpt takes what room is left, in whole lines, so nothing is cut through the middle. -->
+      <View style={{ flex: 1, minHeight: 0 }} onresize={(l) => (excerptRoom = l.height)}>
+        {#if excerpt && excerptLines > 0}
+          <Text style={{ fontSize: s(12), color: c.muted, lineHeight: s(17.5), maxLines: excerptLines }}>{excerpt}</Text>
+        {/if}
+      </View>
     {/if}
     {#if card.labels.length > 0 || priority || card.assignees.length > 0}
-      <View style={{ direction: "row", gap: s(4), align: "center" }}>
+      <View style={{ direction: "row", gap: s(4), align: "center", shrink: 0 }}>
         <View style={{ flex: 1, minWidth: 0, direction: "row", wrap: true, gap: s(4), align: "center" }}>
           {#if priority}
             <View
