@@ -16,11 +16,13 @@ import circle from "@phosphor-icons/core/regular/circle.svg";
 import circleDashed from "@phosphor-icons/core/regular/circle-dashed.svg";
 import circleHalf from "@phosphor-icons/core/regular/circle-half.svg";
 import circleHalfFill from "@phosphor-icons/core/fill/circle-half-fill.svg";
+import columns from "@phosphor-icons/core/regular/columns.svg";
 import cornersOut from "@phosphor-icons/core/regular/corners-out.svg";
 import fileText from "@phosphor-icons/core/regular/file-text.svg";
 import folder from "@phosphor-icons/core/regular/folder.svg";
 import folderSimple from "@phosphor-icons/core/regular/folder-simple.svg";
 import githubLogo from "@phosphor-icons/core/regular/github-logo.svg";
+import gridFour from "@phosphor-icons/core/regular/grid-four.svg";
 import hash from "@phosphor-icons/core/regular/hash.svg";
 import kanban from "@phosphor-icons/core/regular/kanban.svg";
 import lightning from "@phosphor-icons/core/regular/lightning.svg";
@@ -33,6 +35,7 @@ import playFill from "@phosphor-icons/core/fill/play-fill.svg";
 import plus from "@phosphor-icons/core/regular/plus.svg";
 import prohibit from "@phosphor-icons/core/regular/prohibit.svg";
 import prohibitInset from "@phosphor-icons/core/fill/prohibit-inset-fill.svg";
+import rows from "@phosphor-icons/core/regular/rows.svg";
 import square from "@phosphor-icons/core/regular/square.svg";
 import squaresFour from "@phosphor-icons/core/regular/squares-four.svg";
 import tag from "@phosphor-icons/core/regular/tag.svg";
@@ -68,6 +71,10 @@ export const icons = {
   sticky: noteBlank,
   link,
   board: kanban,
+  // Arranging selected nodes: side by side is columns of one node, a stack is rows of one.
+  arrangeGrid: gridFour,
+  arrangeRow: columns,
+  arrangeColumn: rows,
   // Properties
   status: circleDashed,
   field: circleHalf,

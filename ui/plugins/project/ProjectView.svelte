@@ -367,9 +367,9 @@
   function context(ids: string[], x: number, y: number) {
     if (ids.length < 2) return;
     menu?.openAt(x, y, [
-      { label: "Arrange in grid", onselect: () => arrange(ids, "grid") },
-      { label: "Arrange in a row", onselect: () => arrange(ids, "row") },
-      { label: "Arrange in a column", onselect: () => arrange(ids, "column") },
+      { label: "Arrange in grid", icon: icons.arrangeGrid, onselect: () => arrange(ids, "grid") },
+      { label: "Arrange in a row", icon: icons.arrangeRow, onselect: () => arrange(ids, "row") },
+      { label: "Arrange in a column", icon: icons.arrangeColumn, onselect: () => arrange(ids, "column") },
     ]);
   }
 
@@ -654,7 +654,8 @@
     </Viewport>
 
     <Toolbar {tools} bind:view {size} onfit={fit} />
-    <ContextMenu bind:this={menu} />
+    <!-- Its menu doesn't grow for a row's icon, which cuts the longest label short. -->
+    <ContextMenu bind:this={menu} menuStyle={{ minWidth: 200 }} />
 
     {#if filesOpen}
       <Presence
