@@ -54,10 +54,22 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         let open = app.get().map_err(fail)?;
         let ws = open.ws().clone();
         let project = canvas::find_project(&ws, arg(&args, "project")?).map_err(fail)?;
-        open.wrote(&canvas::project_canvas_path(&project));
-        let view = canvas::project_view(&ws, &open.cache(), arg(&args, "project")?).map_err(fail)?;
+        let inside = args["inside"].as_str();
+        open.wrote(&canvas::view_canvas_path(&ws, &project, inside).map_err(fail)?);
+        let view = canvas::project_view(&ws, &open.cache(), arg(&args, "project")?, inside).map_err(fail)?;
         open.previews.want_view(&view);
         Ok(view)
+    });
+    // A folder in `dir` (workspace-relative), with its canvas. Answers with its node.
+    command!("folder_create", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let dir = unique(&ws.root().join(arg(&args, "dir")?), &sanitize(arg(&args, "name")?), "");
+        std::fs::create_dir(&dir).map_err(|e| e.to_string())?;
+        let path = workspace::folder_canvas_path(&dir);
+        open.wrote(&path);
+        workspace::write_canvas(&path, &workspace::Canvas::default()).map_err(fail)?;
+        Ok(json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 220, "height": 64}))
     });
     command!("project_create", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
@@ -349,11 +361,13 @@ fn sanitize(title: &str) -> String {
     if clean.is_empty() { "Untitled".into() } else { clean }
 }
 
+/// `<stem>.<ext>` in `folder`, numbered past the names taken. An empty `ext` names a folder.
 fn unique(folder: &Path, stem: &str, ext: &str) -> PathBuf {
-    let mut path = folder.join(format!("{stem}.{ext}"));
+    let name = |stem: String| if ext.is_empty() { stem } else { format!("{stem}.{ext}") };
+    let mut path = folder.join(name(stem.to_string()));
     let mut n = 2;
     while path.exists() {
-        path = folder.join(format!("{stem} {n}.{ext}"));
+        path = folder.join(name(format!("{stem} {n}")));
         n += 1;
     }
     path

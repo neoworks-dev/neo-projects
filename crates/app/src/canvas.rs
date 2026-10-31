@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 use np_core::media::{self, Media};
 use np_core::previews::{self, Preview};
 use np_core::views;
-use np_core::workspace::{self, Canvas, Node, Project, Uri, Workspace, issues, read_canvas, read_note, write_canvas};
+use np_core::workspace::{
+    self, Canvas, Node, Project, Uri, Workspace, folder_canvas_path, folder_of, issues, read_canvas, read_note,
+    write_canvas,
+};
 use np_core::{Cache, Error, Result};
 use rusqlite::OptionalExtension;
 use serde_json::{Map, Value, json};
@@ -166,11 +169,25 @@ pub fn project_canvas_path(p: &Project) -> PathBuf {
     p.folder.join(format!("{}.canvas", p.name))
 }
 
+/// The canvas a project view shows: the project's own, or with `inside` (a workspace-relative
+/// directory in the project) that folder's.
+pub fn view_canvas_path(ws: &Workspace, project: &Project, inside: Option<&str>) -> Result<PathBuf> {
+    let Some(inside) = inside else {
+        return Ok(project_canvas_path(project));
+    };
+    let dir = ws.root().join(inside);
+    if !dir.starts_with(&project.folder) || !dir.is_dir() {
+        return Err(Error::Other(format!("{inside} is not a folder of {}", project.name)));
+    }
+    Ok(folder_canvas_path(&dir))
+}
+
 /// A project's canvas with its board, the board's issues minus those placed on the canvas, and
-/// the arrows between what is placed.
-pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value> {
+/// the arrows between what is placed. Inside one of its folders, that folder's canvas, which has
+/// no board.
+pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str, inside: Option<&str>) -> Result<Value> {
     let project = find_project(ws, folder)?;
-    let path = project_canvas_path(&project);
+    let path = view_canvas_path(ws, &project, inside)?;
     let mut canvas = load(&path)?;
     let repo = project.repos.first().cloned();
     let repo_id = match repo.as_deref().and_then(|r| r.split_once('/')) {
@@ -182,7 +199,7 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
         None if repo.is_none() => ws.issue_board(&project),
         None => json!({"statusField": null, "columns": []}),
     };
-    if !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board")) {
+    if inside.is_none() && !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board")) {
         // As wide as its columns need (Open and Closed until the first sync tells), never narrower.
         let columns = board["columns"].as_array().map_or(2, Vec::len).max(2) as f64;
         let mut extra = Map::new();
@@ -283,6 +300,9 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
             if rel_path.ends_with(".board") {
                 return local_board(ws, &path);
             }
+            if let Some(dir) = folder_of(&path) {
+                return Ok(folder_item(ws, uri.map(|u| u.to_string()), dir, &path));
+            }
             if let Some(card) = local_issue_card(ws, &path) {
                 return Ok(json!({"kind": "issue", "uri": uri.map(|u| u.to_string()), "card": card}));
             }
@@ -315,6 +335,16 @@ fn aspect(path: &Path) -> Option<f64> {
         return None;
     }
     Some(size.width as f64 / size.height as f64)
+}
+
+/// A folder by its canvas: its directory, workspace-relative, and how many nodes it holds.
+fn folder_item(ws: &Workspace, uri: Option<String>, dir: &Path, canvas_path: &Path) -> Value {
+    if !dir.is_dir() {
+        return json!({"kind": "missing", "uri": uri, "title": "Folder not found"});
+    }
+    let count = load(canvas_path).map(|c| c.nodes.len()).unwrap_or(0);
+    let name = dir.file_name().unwrap_or_default().to_string_lossy();
+    json!({"kind": "folder", "uri": uri, "path": rel(ws, dir), "title": name, "count": count})
 }
 
 /// The card of the local issue a file is, if it is one.

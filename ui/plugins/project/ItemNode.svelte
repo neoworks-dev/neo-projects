@@ -1,7 +1,7 @@
 <script lang="ts">
   // Everything on a project canvas that isn't the board: a note (a card), an image, a file (a PDF
-  // or video with its poster), a web link, an issue placed off the board, a local board. Drawn at
-  // `zoom`.
+  // or video with its poster), a web link, an issue placed off the board, a local board, a folder.
+  // Drawn at `zoom`.
   import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
@@ -138,6 +138,16 @@
         <Text style={{ fontSize: s(11.5), color: c.muted, lineHeight: s(16), maxLines: 2, overflowWrap: "anywhere" }}>
           {item.preview.description}
         </Text>
+      {/if}
+    </View>
+  </View>
+{:else if item.kind === "folder"}
+  <View style={{ ...frame, direction: "row", align: "center", gap: s(10), paddingX: s(14) }} hover={{ borderColor: selected ? c.accent : c.borderStrong }}>
+    <Image src={fileIcon(item.title, true)} style={{ size: s(26), shrink: 0 }} />
+    <View style={{ flex: 1, minWidth: 0, gap: s(2) }}>
+      <Text style={{ fontSize: s(13.5), truncate: true }}>{item.title}</Text>
+      {#if zoom >= 0.45}
+        <Text style={{ fontSize: s(11), color: c.faint }}>{item.count === 1 ? "1 item" : `${item.count} items`}</Text>
       {/if}
     </View>
   </View>

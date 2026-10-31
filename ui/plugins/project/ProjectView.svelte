@@ -21,7 +21,8 @@
   import { icons } from "../../lib/icons.ts";
   const { board: kanban, files: treeView, note: notePencil } = icons;
 
-  let { folder }: { folder: string } = $props();
+  // `inside` is the directory of a folder open within the project, whose canvas shows instead.
+  let { folder, inside }: { folder: string; inside?: string } = $props();
 
   let data = $state<ProjectView | null>(null);
   let view = $state<ViewState>({ x: -40, y: -60, zoom: 0.9 });
@@ -30,10 +31,18 @@
   let connecting = $state<{ from: string; to: string } | null>(null);
   let size = $state({ width: 800, height: 600 });
 
+  /** Where new notes, boards and folders go: the open folder's directory, or the project's. */
+  const here = $derived(inside ?? folder);
+
   async function newBoard() {
-    const project = data?.project;
-    if (!project) return;
-    const node = await app.run(() => app.api.createBoard(project.folder, "Notes board"));
+    if (!data) return;
+    const node = await app.run(() => app.api.createBoard(here, "Notes board"));
+    if (node) add(node, centre());
+  }
+
+  async function newFolder() {
+    if (!data) return;
+    const node = await app.run(() => app.api.createFolder(here, "New folder"));
     if (node) add(node, centre());
   }
 
@@ -45,14 +54,16 @@
     { icon: notePencil, label: "Note", key: "N", onpress: () => void newNote(centre()) },
     { icon: icons.sticky, label: "Sticky note", key: "S", onpress: () => newSticky(centre()) },
     { icon: kanban, label: "Notes board", onpress: () => void newBoard() },
+    { icon: icons.folder, label: "Folder", onpress: () => void newFolder() },
   ];
 
   $effect(() => {
     void app.version;
     const f = folder;
+    const i = inside;
     void app.run(async () => {
-      const next = await app.api.projectView(f);
-      if (f === folder) data = next;
+      const next = await app.api.projectView(f, i);
+      if (f === folder && i === inside) data = next;
     });
   });
 
@@ -180,6 +191,7 @@
     else if (item.kind === "note") app.select({ kind: "note", path: item.path });
     else if (item.kind === "image" || item.kind === "file") void app.run(() => app.api.open(item.path));
     else if (item.kind === "link") void app.run(() => app.api.open(item.uri));
+    else if (item.kind === "folder") app.open({ view: "project", project: folder, inside: item.path });
   }
 
   const selectedNode = $derived(data?.nodes.find((n) => n.id === selected) ?? null);
@@ -205,9 +217,8 @@
 
   async function newNote(at: Point) {
     if (!data) return;
-    const project = data.project;
     await app.run(async () => {
-      const note = await app.api.createNote(project.folder, "Untitled");
+      const note = await app.api.createNote(here, "Untitled");
       const id = newId();
       add({ id, type: "file", file: note.path, x: at.x, y: at.y, width: 280, height: 160 }, at);
       app.select({ kind: "note", path: note.path });

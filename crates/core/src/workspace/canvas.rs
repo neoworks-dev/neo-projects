@@ -1,7 +1,7 @@
 //! JSON Canvas 1.0 (`.canvas`). Keys we don't know, including our own `"neoworks"` hints, are
 //! kept as they are so Obsidian and other tools lose nothing passing through us.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
@@ -99,6 +99,17 @@ pub fn read_canvas(path: &Path) -> Result<Canvas> {
         return Ok(Canvas::default());
     }
     serde_json::from_str(&text).map_err(|e| Error::Other(format!("{}: {e}", path.display())))
+}
+
+/// A folder on a canvas is a directory with a canvas of its own inside, named after it:
+/// `Garden/Seeds/Seeds.canvas`.
+pub fn folder_canvas_path(dir: &Path) -> PathBuf {
+    dir.join(format!("{}.canvas", dir.file_name().unwrap_or_default().to_string_lossy()))
+}
+
+/// The directory of the folder whose canvas `path` is; none for any other file.
+pub fn folder_of(path: &Path) -> Option<&Path> {
+    path.parent().filter(|dir| folder_canvas_path(dir) == path)
 }
 
 /// Writes pretty JSON indented with tabs, through a temp file and a rename.

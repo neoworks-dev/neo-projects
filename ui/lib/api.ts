@@ -98,6 +98,8 @@ export type Item =
   | { kind: "link"; uri: string; title: string; host: string; preview?: LinkPreview }
   | { kind: "board"; uri: string }
   | { kind: "localboard"; uri: string; path: string; title: string; groupBy: string; columns: LocalColumn[] }
+  /** A directory of the project with a canvas inside; `path` is the directory's, `count` its canvas's nodes. */
+  | { kind: "folder"; uri: string | null; path: string; title: string; count: number }
   | { kind: "project"; uri: string; project: Project }
   | { kind: "text"; uri: null; text: string | null }
   | { kind: "group"; uri: null; title: string | null }
@@ -254,7 +256,9 @@ export const api = {
   workspace: () => invoke<{ path: string | null }>("workspace"),
   openWorkspace: (path: string) => invoke<{ path: string }>("workspace_open", { path }),
   overview: () => invoke<Overview>("overview"),
-  projectView: (project: string) => invoke<ProjectView>("project_view", { project }),
+  /** A project's canvas, or with `inside` (a folder's directory) that folder's. */
+  projectView: (project: string, inside?: string) => invoke<ProjectView>("project_view", { project, inside }),
+  createFolder: (dir: string, name: string) => invoke<CanvasNode>("folder_create", { dir, name }),
   createProject: (name: string, repo: string | null) => invoke<Project>("project_create", { name, repo }),
   githubRepos: () => invoke<GithubRepo[]>("github_repos"),
   saveCanvas: (path: string, nodes: CanvasNode[]) => invoke<null>("canvas_save", { path, nodes }),
