@@ -71,7 +71,8 @@
     {#if item.preview?.image}
       <!-- The box clips: on a card too short for it, an image alone would draw over the text. -->
       <View style={{ flex: 1, minHeight: 0, overflow: "hidden", background: c.bg }}>
-        <Image src={item.preview.image} fit="cover" style={{ flex: 1 }} />
+        <!-- A width of its own stops the host from holding the image to its natural proportions. -->
+        <Image src={item.preview.image} fit="cover" style={{ width: "full", height: "full" }} />
       </View>
     {/if}
     <View style={{ padding: s(12), gap: s(4), justify: "center", flex: item.preview?.image ? undefined : 1 }}>
