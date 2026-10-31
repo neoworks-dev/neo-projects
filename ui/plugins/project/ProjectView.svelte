@@ -5,16 +5,17 @@
   import { clipboard } from "@neoworks/svelte-gpui";
   import { Button, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
   import { fade, fly } from "svelte/transition";
-  import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
+  import type { Arrow, CanvasNode, Card, ProjectView, Stroke } from "../../lib/api.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
+  import { flatPoints, pointsOf } from "../../lib/canvas/strokes.ts";
   import { cubicBezier, glide, tween } from "../../lib/canvas/motion.ts";
   import { bounds, onTheWay, stagger, unfoldLayout } from "../../lib/canvas/unfold.ts";
   import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
-  import Viewport, { type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
+  import Viewport, { type DrawTool, type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { relationOptions } from "../../lib/relations.ts";
   import { app } from "../../lib/state.svelte.ts";
-  import { c, easing, eyebrow, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
+  import { c, easing, eyebrow, ghost, radii, shadow, stickyTint, tones } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
   import Files, { isFileDrag } from "./Files.svelte";
   import FolderName from "./FolderName.svelte";
@@ -23,6 +24,9 @@
   import { projectKeys } from "./keys.svelte.ts";
   import { icons } from "../../lib/icons.ts";
   const { board: kanban, files: treeView, note: notePencil } = icons;
+  /** What the pen draws with: a few colours, and a thin and a thick line (canvas units). */
+  const penColors = [c.text, tones.RED, tones.YELLOW, tones.GREEN, tones.BLUE];
+  const penWidths = [2.5, 6];
 
   // `inside` is the directory of a folder open within the project, whose canvas shows instead.
   let { folder, inside }: { folder: string; inside?: string } = $props();
@@ -52,13 +56,44 @@
   /** The file explorer at the left. */
   let filesOpen = $state(false);
 
-  const tools: Tool[] = [
+  /** The drawing tool that is on, if any: a drag on the background draws or erases with it. */
+  let tool = $state<DrawTool | null>(null);
+  let pen = $state({ color: penColors[0], width: penWidths[0] });
+
+  function toggleTool(next: DrawTool) {
+    if (tool === next) tool = null;
+    else tool = next;
+  }
+
+  const tools: Tool[] = $derived([
     { icon: treeView, label: "Files", key: "F", onpress: () => (filesOpen = !filesOpen) },
     { icon: notePencil, label: "Note", key: "N", onpress: () => void newNote(centre()) },
     { icon: icons.sticky, label: "Sticky note", key: "S", onpress: () => newSticky(centre()) },
     { icon: kanban, label: "Notes board", onpress: () => void newBoard() },
     { icon: icons.folder, label: "Folder", onpress: () => void newFolder() },
-  ];
+    { icon: icons.pen, label: "Pen", key: "P", active: tool === "pen", onpress: () => toggleTool("pen") },
+    { icon: icons.eraser, label: "Eraser", key: "E", active: tool === "eraser", onpress: () => toggleTool("eraser") },
+  ]);
+
+  /** The strokes on the background, through world points. */
+  const strokes = $derived((data?.strokes ?? []).map((s) => ({ ...s, points: pointsOf(s.points) })));
+
+  function saveStrokes(next: Stroke[]) {
+    if (!data) return;
+    data = { ...data, strokes: next };
+    const path = data.path;
+    void app.run(() => app.api.saveStrokes(path, next));
+  }
+
+  function drew(points: Point[]) {
+    if (!data) return;
+    saveStrokes([...data.strokes, { id: newId(), color: pen.color, width: pen.width, points: flatPoints(points) }]);
+  }
+
+  function erased(ids: string[]) {
+    if (!data) return;
+    saveStrokes(data.strokes.filter((s) => !ids.includes(s.id)));
+  }
 
   /** The folder whose contents are laid out beside it, by its node's id, while it folds too. */
   let unfolded = $state<string | null>(null);
@@ -542,7 +577,17 @@
     projectKeys.paste = paste;
     projectKeys.files = () => (filesOpen = !filesOpen);
     projectKeys.sticky = () => newSticky(centre());
+    projectKeys.pen = () => toggleTool("pen");
+    projectKeys.eraser = () => toggleTool("eraser");
+    projectKeys.stopDrawing = () => {
+      if (!tool) return false;
+      tool = null;
+      return true;
+    };
     return () => {
+      projectKeys.pen = null;
+      projectKeys.eraser = null;
+      projectKeys.stopDrawing = null;
       projectKeys.remove = null;
       projectKeys.note = null;
       projectKeys.paste = null;
@@ -574,6 +619,11 @@
       onfiles={(paths, at) => void files(paths, at)}
       accept={(d) => isCard(d) || isFileDrag(d)}
       ondropdata={dropped}
+      {strokes}
+      {tool}
+      {pen}
+      ondrew={drew}
+      onerase={erased}
     >
       {#snippet node(n, zoom)}
         <!-- Held over a folder, a node lets the folder show through. -->
@@ -617,7 +667,39 @@
       </Presence>
     {/if}
 
-    {#if selectedNode?.type === "text" && !selectedNode.in && editing !== selectedNode.id}
+    {#if tool === "pen"}
+      <!-- The pen's colours and widths, where a selected node's bar would be. -->
+      <Presence
+        in={[fly, { y: 10, duration: 180 }]}
+        out={[fade, { duration: 120 }]}
+        style={{ position: "absolute", top: 14, left: 0, right: 0, align: "center" }}
+      >
+        <View
+          style={{ direction: "row", gap: 6, align: "center", padding: 6, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
+          onpress={() => {}}
+        >
+          {#each penColors as color (color)}
+            <Button
+              style={{ size: 22, radius: 11, background: color, borderWidth: 2, borderColor: pen.color === color ? c.text : c.surface, transition: 120 }}
+              hover={{ borderColor: c.text }}
+              onpress={() => (pen = { ...pen, color })}
+            />
+          {/each}
+          <View style={{ width: 1, height: 18, background: c.border, marginX: 2 }} />
+          {#each penWidths as width (width)}
+            <Button
+              style={{ size: 26, radius: 8, align: "center", justify: "center", background: pen.width === width ? c.hover : c.surface, transition: 120 }}
+              hover={{ background: c.hover }}
+              onpress={() => (pen = { ...pen, width })}
+            >
+              <View style={{ size: width + 2, radius: (width + 2) / 2, background: pen.color }} />
+            </Button>
+          {/each}
+        </View>
+      </Presence>
+    {/if}
+
+    {#if !tool && selectedNode?.type === "text" && !selectedNode.in && editing !== selectedNode.id}
       {@const sticky = selectedNode}
       <Presence
         in={[fly, { y: 10, duration: 180 }]}
@@ -640,7 +722,7 @@
       </Presence>
     {/if}
 
-    {#if selectedNode?.item?.kind === "folder"}
+    {#if !tool && selectedNode?.item?.kind === "folder"}
       {@const folderItem = selectedNode.item}
       <Presence
         in={[fly, { y: 10, duration: 180 }]}

@@ -28,11 +28,23 @@
     x: number;
     y: number;
   }
+
+  /** A line drawn on the background, through world points. */
+  export interface VStroke {
+    id: string;
+    color: string;
+    width: number;
+    points: { x: number; y: number }[];
+  }
+
+  /** What a drag on the background does instead of selecting: draw a stroke, or erase strokes. */
+  export type DrawTool = "pen" | "eraser";
 </script>
 
 <script lang="ts" generics="N extends VNode, A extends VArrow">
   // An infinite canvas: nodes placed in world coordinates, drawn at the view's zoom, with arrows
-  // between them. Drag the background to select the nodes in a box (Shift adds to the selection),
+  // between them and strokes drawn on the background under them. With a drawing tool on, a drag
+  // on the background draws a stroke or erases the strokes it crosses. Drag the background to select the nodes in a box (Shift adds to the selection),
   // drag it with the middle or right button or turn the wheel to pan, Ctrl+wheel to zoom. Press a
   // node to select it, Shift+press to add or take it out. Drag a node to move it with the rest of
   // the selection, or its sides and corners to resize it. Near a node, a dot slides out past the
@@ -71,6 +83,7 @@
     type Side,
   } from "./geometry.ts";
   import Ink from "./Ink.svelte";
+  import { thinned, touchesStroke } from "./strokes.ts";
 
   interface Props {
     nodes: N[];
@@ -106,6 +119,16 @@
     /** Which in-app drags the canvas takes, and what to do with one dropped at a world point. */
     accept?: (data: unknown) => boolean;
     ondropdata?: (data: unknown, at: Point) => void;
+    /** The lines drawn on the background, under everything else. */
+    strokes?: VStroke[];
+    /** Set while drawing: a drag on the background draws or erases instead of selecting. */
+    tool?: DrawTool | null;
+    /** The colour and width (world) the pen draws with. */
+    pen?: { color: string; width: number };
+    /** A stroke was drawn through these world points. */
+    ondrew?: (points: Point[]) => void;
+    /** The eraser was dragged across the strokes `ids`. */
+    onerase?: (ids: string[]) => void;
   }
 
   let {
@@ -130,6 +153,11 @@
     onfiles,
     accept = () => false,
     ondropdata,
+    strokes = [],
+    tool = null,
+    pen = { color: "#ffffff", width: 3 },
+    ondrew,
+    onerase,
   }: Props = $props();
 
   let box = $state<Layout>({ x: 0, y: 0, width: 0, height: 0 });
@@ -156,6 +184,12 @@
   let lasso = $state<{ from: Point; to: Point; kept: string[] } | null>(null);
   /** An arrow being drawn: from which nodes, to where the pointer is (viewport coordinates). */
   let link = $state<{ from: string[]; to: Point } | null>(null);
+  /** The stroke being drawn, through world points. */
+  let drawing = $state<Point[] | null>(null);
+  /** The strokes the eraser has gone across so far, hidden until it is let go. */
+  let erasing = $state<string[] | null>(null);
+  /** How close the eraser comes to a stroke, in screen pixels, to take it. */
+  const ERASER = 8;
   let pointer: Point | null = null;
 
   /** How close the pointer comes to a node, in screen pixels, before its arrow dot shows. */
@@ -168,7 +202,7 @@
   let dotHot = $state(false);
 
   function track(e: PointerEvent) {
-    if (!linkable || link) return;
+    if (!linkable || link || tool) return;
     const at = toWorld(local(e));
     const found = near(shown, at, NEAR / zoom);
     if (!found) {
@@ -265,6 +299,13 @@
   /** The selection box, in viewport coordinates. */
   const lassoBox = $derived(lasso ? spanned(lasso.from, lasso.to) : null);
 
+  const toLayer = (points: Point[]) => points.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
+
+  /** The strokes on the background, without those the eraser is taking, in layer coordinates. */
+  const inked = $derived(
+    strokes.filter((s) => !erasing?.includes(s.id)).map((s) => ({ ...s, points: toLayer(s.points) })),
+  );
+
   // Pointer moves come faster than frames (a 1000 Hz mouse sends sixteen a frame); only the last
   // one before each frame is applied.
   let pending: (() => void) | null = null;
@@ -291,8 +332,63 @@
     return { x: e.windowX - box.x, y: e.windowY - box.y };
   }
 
+  /** Every point the pen has passed through, which `drawing` catches up with once a frame. */
+  let penPoints: Point[] = [];
+
+  function drawDown(e: PointerEvent) {
+    nearby = null;
+    const at = toWorld(local(e));
+    if (tool === "pen") {
+      penPoints = [at];
+      drawing = penPoints;
+      return;
+    }
+    erasing = [];
+    erase(at);
+  }
+
+  function drawMove(e: PointerEvent) {
+    const at = toWorld(local(e));
+    if (erasing) {
+      erase(at);
+      return;
+    }
+    penPoints.push(at);
+    later(() => (drawing = [...penPoints]));
+  }
+
+  function drawUp() {
+    flush();
+    if (drawing) {
+      const points = thinned(penPoints, 1.5 / zoom);
+      if (points.length > 1) ondrew?.(points);
+    }
+    if (erasing && erasing.length > 0) onerase?.(erasing);
+    drawing = null;
+    erasing = null;
+    eraserAt = null;
+    penPoints = [];
+  }
+
+  /** Where the eraser was last, in world coordinates. */
+  let eraserAt: Point | null = null;
+
+  /** Takes the strokes the eraser touches on its way from where it was to `at`. */
+  function erase(at: Point) {
+    const from = eraserAt ?? at;
+    eraserAt = at;
+    const taken = erasing ?? [];
+    const reach = ERASER / zoom;
+    const hit = strokes.filter((s) => !taken.includes(s.id) && touchesStroke(s.points, from, at, reach + s.width / 2));
+    if (hit.length > 0) erasing = [...taken, ...hit.map((s) => s.id)];
+  }
+
   function backgroundDown(e: PointerEvent) {
     onselectarrow?.(null);
+    if (e.button === 0 && tool) {
+      drawDown(e);
+      return;
+    }
     if (e.button === 0) {
       lasso = { from: local(e), to: local(e), kept: e.shift ? selected : [] };
       nearby = null;
@@ -315,6 +411,10 @@
 
   function backgroundMove(e: PointerEvent) {
     pointer = local(e);
+    if (drawing || erasing) {
+      drawMove(e);
+      return;
+    }
     if (lasso) {
       const to = local(e);
       later(() => {
@@ -338,6 +438,10 @@
   }
 
   function backgroundUp() {
+    if (drawing || erasing) {
+      drawUp();
+      return;
+    }
     flush();
     pan = null;
     panning = false;
@@ -486,7 +590,7 @@
 >
   <DropTarget {accept} ondrop={dropped} style={{ position: "absolute", inset: 0 }}>
     <View
-      style={{ position: "absolute", inset: 0, background: c.bg, cursor: panning ? "grabbing" : "default" }}
+      style={{ position: "absolute", inset: 0, background: c.bg, cursor: panning ? "grabbing" : tool ? "crosshair" : "default" }}
       ondown={backgroundDown}
       onmove={backgroundMove}
       onup={backgroundUp}
@@ -494,6 +598,12 @@
     />
   </DropTarget>
   <View style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, translate: shift }}>
+    {#each inked as stroke (stroke.id)}
+      <Ink points={stroke.points} color={stroke.color} width={stroke.width * zoom} head={false} />
+    {/each}
+    {#if drawing && drawing.length > 1}
+      <Ink points={toLayer(drawing)} color={pen.color} width={pen.width * zoom} head={false} />
+    {/if}
     {#each lines as { arrow, points } (arrow.id)}
       {@const chosen = arrow.id === selectedArrow}
       <Ink {points} color={chosen ? c.accent : (arrow.color ?? c.borderStrong)} width={chosen ? 2.5 : 1.75} />

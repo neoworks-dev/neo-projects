@@ -34,7 +34,16 @@ export const project = {
       if (app.state.route.view !== "project" || !projectKeys.files || app.state.selection?.kind === "note") return false;
       projectKeys.files();
     });
+    keymap.bind("p", () => {
+      if (app.state.route.view !== "project" || !projectKeys.pen || app.state.selection?.kind === "note") return false;
+      projectKeys.pen();
+    });
+    keymap.bind("e", () => {
+      if (app.state.route.view !== "project" || !projectKeys.eraser || app.state.selection?.kind === "note") return false;
+      projectKeys.eraser();
+    });
     keymap.bind("escape", () => {
+      if (app.state.route.view === "project" && projectKeys.stopDrawing?.()) return true;
       if (app.state.selection) {
         app.state.select(null);
         return true;

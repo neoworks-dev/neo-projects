@@ -4,6 +4,8 @@
     label: string;
     /** The key that does the same, shown in the tooltip. */
     key?: string;
+    /** A mode that is on, such as the pen while drawing. */
+    active?: boolean;
     onpress: () => void;
   }
 </script>
@@ -69,7 +71,11 @@
   >
     {#each tools as tool (tool.label)}
       <Tooltip text={tool.key ? `${tool.label}  ${tool.key}` : tool.label} placement="top">
-        <Button style={iconButton} hover={iconHover} onpress={tool.onpress}>
+        <Button
+          style={tool.active ? { ...iconButton, background: c.accent, color: c.onAccent } : iconButton}
+          hover={tool.active ? {} : iconHover}
+          onpress={tool.onpress}
+        >
           <Icon svg={tool.icon} size={18} />
         </Button>
       </Tooltip>

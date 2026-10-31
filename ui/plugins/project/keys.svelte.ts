@@ -10,6 +10,12 @@ class ProjectKeys {
   sticky: (() => void) | null = null;
   /** Shows or hides the file explorer. */
   files: (() => void) | null = null;
+  /** Turns the pen on, or off when it is on. */
+  pen: (() => void) | null = null;
+  /** Turns the eraser on, or off when it is on. */
+  eraser: (() => void) | null = null;
+  /** Turns the pen or eraser off; false when neither was on. */
+  stopDrawing: (() => boolean) | null = null;
 }
 
 export const projectKeys = new ProjectKeys();

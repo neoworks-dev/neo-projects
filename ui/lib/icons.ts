@@ -17,6 +17,7 @@ import circleDashed from "@phosphor-icons/core/regular/circle-dashed.svg";
 import circleHalf from "@phosphor-icons/core/regular/circle-half.svg";
 import circleHalfFill from "@phosphor-icons/core/fill/circle-half-fill.svg";
 import cornersOut from "@phosphor-icons/core/regular/corners-out.svg";
+import eraser from "@phosphor-icons/core/regular/eraser.svg";
 import fileText from "@phosphor-icons/core/regular/file-text.svg";
 import folder from "@phosphor-icons/core/regular/folder.svg";
 import folderSimple from "@phosphor-icons/core/regular/folder-simple.svg";
@@ -29,6 +30,7 @@ import minus from "@phosphor-icons/core/regular/minus.svg";
 import noteBlank from "@phosphor-icons/core/regular/note-blank.svg";
 import notePencil from "@phosphor-icons/core/regular/note-pencil.svg";
 import paperPlaneRight from "@phosphor-icons/core/regular/paper-plane-right.svg";
+import pen from "@phosphor-icons/core/regular/pen.svg";
 import playFill from "@phosphor-icons/core/fill/play-fill.svg";
 import plus from "@phosphor-icons/core/regular/plus.svg";
 import prohibit from "@phosphor-icons/core/regular/prohibit.svg";
@@ -68,6 +70,9 @@ export const icons = {
   sticky: noteBlank,
   link,
   board: kanban,
+  // Drawing on the canvas
+  pen,
+  eraser,
   // Properties
   status: circleDashed,
   field: circleHalf,
