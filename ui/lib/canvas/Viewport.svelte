@@ -118,8 +118,8 @@
     onselectarrow?: (id: string | null) => void;
     /** The dragged nodes were let go where `moves` says; `grabbed` is the one the pointer held. */
     onmoved?: (moves: Move[], grabbed: string) => void;
-    /** The node held in a drag is now at `x`, `y`; `onmoved` follows when it is let go. */
-    ondrag?: (id: string, x: number, y: number) => void;
+    /** The node held in a drag is now at `x`, `y`, the pointer at `pointer`; `onmoved` follows when it is let go. */
+    ondrag?: (id: string, x: number, y: number, pointer: Point) => void;
     /** An arrow drawn from the nodes `from` onto the node `to`. */
     onconnect?: (from: string[], to: string) => void;
     /** A right press on a node, for the nodes `ids` it acts on, at a point in the window. */
@@ -552,7 +552,7 @@
       }
       drag = { ...drag, dx: Math.round(dx), dy: Math.round(dy), moved };
       const start = drag.starts.get(drag.id);
-      if (moved && start) ondrag?.(drag.id, start.x + drag.dx, start.y + drag.dy);
+      if (moved && start) ondrag?.(drag.id, start.x + drag.dx, start.y + drag.dy, toWorld({ x: windowX - box.x, y: windowY - box.y }));
     });
   }
 

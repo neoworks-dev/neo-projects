@@ -17,7 +17,8 @@
   const { fileText, play } = icons;
 
   // `width` and `height` are the node's, in world units. `open` is a folder unfolded beside it,
-  // `target` one that a dragged node would go into.
+  // `target` one that a dragged node would go into, `opening` how far open it is for nodes falling in,
+  // and `gone` how far each of its peeking cards has left it as its thing comes out.
   let {
     item,
     zoom,
@@ -26,8 +27,19 @@
     height,
     open = false,
     target = false,
-  }: { item: Item; zoom: number; selected: boolean; width: number; height: number; open?: boolean; target?: boolean } =
-    $props();
+    opening = 0,
+    gone = [],
+  }: {
+    item: Item;
+    zoom: number;
+    selected: boolean;
+    width: number;
+    height: number;
+    open?: boolean;
+    target?: boolean;
+    opening?: number;
+    gone?: number[];
+  } = $props();
 
   const excerpt = $derived(item.kind === "note" ? plainText(item.excerpt, 240) : "");
   const frame = $derived({
@@ -152,7 +164,7 @@
     </View>
   </View>
 {:else if item.kind === "folder"}
-  <FolderNode {item} {zoom} {height} {selected} {open} {target} />
+  <FolderNode {item} {zoom} {height} {selected} {open} {target} {opening} {gone} />
 {:else if item.kind === "localboard"}
   <LocalBoard {item} {zoom} {selected} />
 {:else if item.kind === "text"}

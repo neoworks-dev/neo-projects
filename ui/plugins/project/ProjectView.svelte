@@ -7,10 +7,22 @@
   import { fade, fly } from "svelte/transition";
   import type { Arrow, CanvasNode, Card, ProjectView, Stroke } from "../../lib/api.ts";
   import { arranged, type Arrangement } from "../../lib/canvas/arrange.ts";
-  import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
+  import { DROP_MS, dropFrame, folderOpening, HELD_SCALE, scaledBox } from "../../lib/canvas/dropIn.ts";
+  import { contains, freeSpot, type Point, type Rect } from "../../lib/canvas/geometry.ts";
   import { flatPoints, pointsOf } from "../../lib/canvas/strokes.ts";
   import { cubicBezier, glide, tween } from "../../lib/canvas/motion.ts";
-  import { bounds, onTheWay, stagger, unfoldLayout } from "../../lib/canvas/unfold.ts";
+  import {
+    bounds,
+    outOf,
+    PEEK,
+    peekCard,
+    pushAside,
+    rowsBox,
+    shown,
+    stagger,
+    unfoldLayout,
+    type Folded,
+  } from "../../lib/canvas/unfold.ts";
   import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type DrawTool, type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
@@ -103,6 +115,48 @@
   let stopSpread: (() => void) | null = null;
   /** The node being dragged onto a folder, and the folder it would go into if let go now. */
   let dropping = $state<{ node: string; folder: string } | null>(null);
+  /** The unfolded folder's node dragged out of its rows, which close up behind it. */
+  let leaving = $state<string | null>(null);
+  /** Where nodes were when the layout last changed under them, and how far they've glided on. */
+  let glideFrom = $state.raw(new Map<string, Point>());
+  let glideProgress = $state(1);
+  let stopGlide: (() => void) | null = null;
+  const GLIDE_MS = 220;
+
+  $effect(() => () => stopGlide?.());
+
+  /** The nodes in a drag, each with the point it shrinks towards over a folder: the pointer. */
+  let holding = $state.raw<Map<string, Point> | null>(null);
+  /** How big the held nodes are: smaller while over a folder. */
+  let heldScale = $state(1);
+  let stopHeld: (() => void) | null = null;
+  const HELD_MS = 160;
+  /** Nodes let go over a folder, on their way in: the boxes they were let go as, and how far along. */
+  let falling = $state.raw<{ folder: string; boxes: Map<string, { held: Rect; w: number; h: number }>; progress: number } | null>(
+    null,
+  );
+  let stopFall: (() => void) | null = null;
+
+  $effect(() => () => {
+    stopHeld?.();
+    stopFall?.();
+  });
+
+  function scaleHeld(to: number, done?: () => void) {
+    stopHeld?.();
+    stopHeld = tween(heldScale, to, HELD_MS, (value) => (heldScale = value), done);
+  }
+
+  /**
+   * Lets every node glide from where it is shown now to wherever the next layout puts it; `also`
+   * adds starting points for nodes that will show under another id.
+   */
+  function glideFromHere(also: [string, Point][] = []) {
+    stopGlide?.();
+    glideFrom = new Map([...nodes.map((n): [string, Point] => [n.id, { x: n.x, y: n.y }]), ...also]);
+    glideProgress = 0;
+    stopGlide = tween(0, 1, GLIDE_MS, (value) => (glideProgress = value), () => (glideFrom = new Map()));
+  }
 
   $effect(() => {
     void app.version;
@@ -124,6 +178,11 @@
     raw: CanvasNode;
     /** Below 1 while it comes out of a folder or goes back in. */
     opacity?: number;
+    /** Below 1 while held over a folder or falling in, shrunk towards `origin` from its top left. */
+    scale?: number;
+    origin?: Point;
+    /** An unfolded folder's: how far each card peeking out of it has gone, 0 to 1, as its thing comes out. */
+    gone?: number[];
   }
 
   /** The design system's easing for things that arrive and leave, and how long each takes. */
@@ -159,9 +218,11 @@
     return n.text ?? "";
   }
 
-  // The canvas's own nodes where they are, then the unfolded folder's on their way from under it
-  // to their rows beside it, one after the other in the rows' order.
-  const nodes = $derived.by<Placed[]>(() => {
+  // The canvas's own nodes where they are, then the unfolded folder's on their way out of it to
+  // their rows beside it, one after the other in the rows' order. Own nodes in the rows' way
+  // move aside while the folder is open; only a drag saves where they were pushed to. A node being
+  // dragged out of the rows keeps no place in them.
+  const laidOut = $derived.by<Placed[]>(() => {
     const all = data?.nodes ?? [];
     const own = all
       .filter((n) => !n.in)
@@ -169,19 +230,74 @@
     const folderNode = own.find((n) => n.id === unfolded);
     if (!folderNode) return own;
     const inner = all.filter((n) => n.in?.folder === unfolded);
-    const spots = unfoldLayout(
-      folderNode,
-      inner.map((n) => ({ id: n.id, kind: n.item?.kind ?? n.type, title: nameOf(n), w: n.width, h: n.height })),
-    );
+    const spots = unfoldLayout(folderNode, inner.filter((n) => n.id !== leaving).map(folded));
     const order = [...spots.keys()];
-    const laid = inner.map((n) => {
+    // The first few come out of the cards that peeked out of the folder, which fade as they go;
+    // the rest out of the frontmost card.
+    const gone: number[] = [];
+    const laid = inner.map((n, index) => {
       const spot = spots.get(n.id) ?? { x: n.x, y: n.y };
       const t = easeOut(stagger(spread, order.indexOf(n.id), order.length));
-      const at = onTheWay(folderNode, spot, n.width, n.height, t);
-      return { id: n.id, x: at.x, y: at.y, w: n.width, h: n.height, raw: n, opacity: t };
+      if (index < PEEK) gone.push(shown(t));
+      const card = peekCard(folderNode, Math.min(index, PEEK - 1));
+      const way = outOf(card, spot, n.width, t);
+      const origin = { x: 0, y: 0 };
+      return { id: n.id, x: way.x, y: way.y, w: n.width, h: n.height, raw: n, opacity: shown(t), scale: way.scale, origin };
     });
-    return [...own, ...laid];
+    const rows = rowsBox(spots, inner.map(folded));
+    if (!rows) return [...own, ...laid];
+    const offsets = pushAside(rows, own.filter((n) => n.id !== unfolded));
+    const t = easeOut(spread);
+    const pushed = own.map((n) => {
+      if (n.id === unfolded) return { ...n, gone };
+      const offset = offsets.get(n.id);
+      if (!offset) return n;
+      return { ...n, x: n.x + offset.x * t, y: n.y + offset.y * t };
+    });
+    return [...pushed, ...laid];
   });
+
+  /** The layout, with each node on its way there from where it was when the layout last changed. */
+  const glided = $derived.by<Placed[]>(() => {
+    if (glideFrom.size === 0) return laidOut;
+    const t = easeOut(glideProgress);
+    return laidOut.map((n) => {
+      const from = glideFrom.get(n.id);
+      if (!from) return n;
+      return { ...n, x: from.x + (n.x - from.x) * t, y: from.y + (n.y - from.y) * t };
+    });
+  });
+
+  /** What the canvas shows: held nodes shrunk over a folder, and dropped ones falling into it. */
+  const nodes = $derived.by<Placed[]>(() => {
+    if (!falling && (!holding || heldScale === 1)) return glided;
+    return glided.map((n) => {
+      const box = falling?.boxes.get(n.id);
+      if (falling && box) {
+        const folderNode = laidOut.find((f) => f.id === falling!.folder);
+        if (!folderNode) return n;
+        const frame = dropFrame(box.held, box.w, box.h, folderNode, falling.progress);
+        return { ...n, ...frame, origin: { x: n.w / 2, y: n.h / 2 } };
+      }
+      const origin = holding?.get(n.id);
+      if (!origin) return n;
+      return { ...n, scale: heldScale, origin };
+    });
+  });
+
+  /** A node's content drawn `scale` times its size towards `origin`: lengths in a zoom multiply, its offset too. */
+  function scaled(n: Placed) {
+    const scale = Math.max(n.scale ?? 1, 0.01);
+    if (scale === 1 || !n.origin) return { flex: 1 };
+    const left = (n.origin.x * (1 - scale)) / scale;
+    const top = (n.origin.y * (1 - scale)) / scale;
+    return { position: "absolute" as const, left, top, width: n.w, height: n.h, zoom: scale };
+  }
+
+  /** An unfolded folder's node as its rows sort and size it. */
+  function folded(n: CanvasNode): Folded {
+    return { id: n.id, kind: n.item?.kind ?? n.type, title: nameOf(n), w: n.width, h: n.height };
+  }
   const boardNode = $derived(nodes.find((n) => n.raw.item?.kind === "board"));
   const arrows = $derived(
     (data?.arrows ?? []).map((a) => ({ ...a, color: a.type === "blocks" ? "#f2555a99" : undefined })),
@@ -251,21 +367,93 @@
     return [id];
   }
 
-  function dragging(id: string, x: number, y: number) {
+  function dragging(id: string, x: number, y: number, pointer: Point) {
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
-    const into = folderAt(dragged(id), { x: x + node.w / 2, y: y + node.h / 2 });
+    const centre = { x: x + node.w / 2, y: y + node.h / 2 };
+    const into = folderAt(dragged(id), centre);
+    if (into && !dropping) scaleHeld(HELD_SCALE);
+    if (!into && dropping) scaleHeld(1);
     if (into) dropping = { node: id, folder: into.id };
     else dropping = null;
+    holding = heldOrigins(dragged(id), id, { x, y }, pointer);
+    let out: string | null = null;
+    if (node.raw.in && !inRows(node.raw.in.folder, centre)) out = id;
+    if (out === leaving) return;
+    glideFromHere();
+    leaving = out;
+  }
+
+  /**
+   * The point each of the nodes `ids` shrinks towards, from its top left: the pointer. They move
+   * together, so each is where the layout has it, offset as `grabbed` is from its own place to `at`.
+   */
+  function heldOrigins(ids: string[], grabbed: string, at: Point, pointer: Point): Map<string, Point> {
+    const lead = laidOut.find((n) => n.id === grabbed);
+    const origins = new Map<string, Point>();
+    if (!lead) return origins;
+    for (const n of laidOut) {
+      if (!ids.includes(n.id)) continue;
+      const x = at.x + n.x - lead.x;
+      const y = at.y + n.y - lead.y;
+      origins.set(n.id, { x: pointer.x - x, y: pointer.y - y });
+    }
+    return origins;
+  }
+
+  /**
+   * Lets the nodes `moves` put down over the folder `folderId` fly over it and fall in, then calls
+   * `put`, which takes them off this canvas.
+   */
+  function fallInto(moves: Move[], folderId: string, put: () => void) {
+    const boxes = new Map<string, { held: Rect; w: number; h: number }>();
+    for (const move of moves) {
+      const n = laidOut.find((l) => l.id === move.id);
+      if (!n) continue;
+      let origin = holding?.get(n.id);
+      if (!origin) origin = { x: n.w / 2, y: n.h / 2 };
+      boxes.set(n.id, { held: scaledBox({ x: move.x, y: move.y, w: n.w, h: n.h }, origin, heldScale), w: n.w, h: n.h });
+    }
+    stopHeld?.();
+    stopFall?.();
+    falling = { folder: folderId, boxes, progress: 0 };
+    stopFall = tween(
+      0,
+      1,
+      DROP_MS,
+      (progress) => {
+        if (falling) falling = { ...falling, progress };
+      },
+      () => {
+        put();
+        falling = null;
+        leaving = null;
+        holding = null;
+        heldScale = 1;
+      },
+    );
+  }
+
+  /** Whether `at` is over the folder `folderId` or the rows its contents unfold into. */
+  function inRows(folderId: string, at: Point): boolean {
+    const folderNode = laidOut.find((n) => n.id === folderId);
+    if (!folderNode) return false;
+    const inner = (data?.nodes ?? []).filter((n) => n.in?.folder === folderId).map(folded);
+    const rows = rowsBox(unfoldLayout(folderNode, inner), inner);
+    const area = bounds(rows ? [folderNode, rows] : [folderNode]);
+    return area !== null && contains(area, at);
   }
 
   function moved(moves: Move[], grabbed: string) {
     dropping = null;
-    if (moves.length === 1) {
-      movedOne(moves[0].id, moves[0].x, moves[0].y);
-      return;
-    }
-    movedGroup(moves, grabbed);
+    // A node leaving the rows is placed first, from where the rows show now.
+    if (moves.length === 1) movedOne(moves[0].id, moves[0].x, moves[0].y);
+    else movedGroup(moves, grabbed);
+    // A node falling into another folder keeps its gap in the rows closed until it is in.
+    if (!falling) leaving = null;
+    // Let go anywhere but into a folder, held nodes grow back.
+    if (!falling && heldScale !== 1) scaleHeld(1, () => (holding = null));
+    else if (!falling) holding = null;
   }
 
   /**
@@ -282,7 +470,7 @@
     const ids = moves.map((m) => m.id);
     const into = folderAt(ids, centre);
     if (into) {
-      void moveAllInto(ids, into.canvas);
+      fallInto(moves, into.id, () => void moveAllInto(ids, into.canvas));
       return;
     }
     const onBoard = boardNode !== undefined && contains(boardNode, centre);
@@ -331,7 +519,8 @@
     }
     const into = folderAt([id], centre);
     if (into) {
-      void moveNode(id, data.path, id, into.canvas);
+      const path = data.path;
+      fallInto([{ id, x, y }], into.id, () => void moveNode(id, path, id, into.canvas));
       return;
     }
     save(data.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)));
@@ -343,14 +532,33 @@
    */
   function movedFromFolder(node: CanvasNode, from: NonNullable<CanvasNode["in"]>, x: number, y: number, centre: Point) {
     if (!data) return;
+    // Out on this canvas it shows under its own id; either way it glides on from where it was let go.
+    glideFromHere([
+      [node.id, { x, y }],
+      [from.id, { x, y }],
+    ]);
     const into = folderAt([node.id], centre);
-    if (into) {
-      if (into.canvas !== from.canvas) void moveNode(node.id, from.canvas, from.id, into.canvas);
+    if (into && into.canvas !== from.canvas) {
+      fallInto([{ id: node.id, x, y }], into.id, () => void moveNode(node.id, from.canvas, from.id, into.canvas));
       return;
     }
-    const area = bounds(nodes.filter((n) => n.raw.in?.folder === from.folder || n.id === from.folder));
-    if (area && contains(area, centre)) return;
-    void moveNode(node.id, from.canvas, from.id, data.path, [x, y]);
+    if (into) return;
+    if (inRows(from.folder, centre)) return;
+    void takeOut(node, from, x, y);
+  }
+
+  /**
+   * Puts the unfolded folder's node `node` onto this canvas at `x`, `y`. It shows there under its
+   * own id at once, so it stays in view until the reload brings it back from the host.
+   */
+  async function takeOut(node: CanvasNode, from: NonNullable<CanvasNode["in"]>, x: number, y: number) {
+    if (!data) return;
+    const path = data.path;
+    const { in: _, ...rest } = node;
+    data = { ...data, nodes: data.nodes.map((n) => (n.id === node.id ? { ...rest, id: from.id, x, y } : n)) };
+    selected = [from.id];
+    await app.run(() => app.api.putInFolder(from.canvas, from.id, path, [x, y]));
+    app.version++;
   }
 
   /**
@@ -674,8 +882,8 @@
       onerase={erased}
     >
       {#snippet node(n, zoom)}
-        <!-- Held over a folder, a node lets the folder show through. -->
-        <View style={{ flex: 1, opacity: dropping?.node === n.id ? 0.45 : (n.opacity ?? 1) }}>
+        <!-- Held over a folder or falling into one, a node shrinks inside its box. -->
+        <View style={{ ...scaled(n), opacity: n.opacity ?? 1 }}>
           {#if n.raw.item?.kind === "board"}
             <BoardNode board={data!.board} project={data!.project} {zoom} {placed} />
           {:else if n.raw.type === "text"}
@@ -696,7 +904,9 @@
               width={n.w}
               height={n.h}
               open={unfolded === n.id}
-              target={dropping?.folder === n.id}
+              target={dropping?.folder === n.id || falling?.folder === n.id}
+              opening={falling?.folder === n.id ? folderOpening(falling.progress) : 0}
+              gone={n.gone}
             />
           {/if}
         </View>
