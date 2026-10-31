@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Everything on a project canvas that isn't the board: a note (a card), an image, a file, a web
-  // link, an issue placed off the board, a local board. Drawn at `zoom`.
+  // Everything on a project canvas that isn't the board: a note (a card), an image, a file (a PDF
+  // or video with its poster), a web link, an issue placed off the board, a local board. Drawn at
+  // `zoom`.
   import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
@@ -8,7 +9,8 @@
   import { c, ring } from "../../lib/theme.ts";
   import LocalBoard from "./LocalBoard.svelte";
   import { icons } from "../../lib/icons.ts";
-  const { fileText } = icons;
+  import { duration, pages } from "../../lib/media.ts";
+  const { fileText, filePdf, fileVideo, play } = icons;
 
   let { item, zoom, selected }: { item: Item; zoom: number; selected: boolean } = $props();
 
@@ -52,6 +54,51 @@
     <Image src={item.path} fit="contain" style={{ flex: 1 }} />
     {#if zoom >= 0.5}
       <Text style={{ fontSize: s(11), color: c.muted, padding: [s(4), s(8)], truncate: true }}>{item.title}</Text>
+    {/if}
+  </View>
+{:else if item.kind === "file" && item.media?.poster}
+  {@const media = item.media}
+  {@const poster = item.media.poster}
+  {@const pdf = item.mime === "application/pdf"}
+  <View style={frame}>
+    {#if pdf}
+      <!-- The first page sits in the card with room around it, as a document does. -->
+      <View style={{ flex: 1, minHeight: 0, padding: s(12), background: c.raised, align: "center", justify: "center" }}>
+        <Image
+          src={poster}
+          fit="contain"
+          style={{ height: "full", aspectRatio: media.posterAspect ?? 0.707, radius: s(3) }}
+        />
+      </View>
+    {:else}
+      <!-- The frame fills the card's width in its own proportions and rounds its own top corners,
+           which the card's overflow clips square (see the link card). -->
+      <View style={{ width: "full", aspectRatio: media.posterAspect ?? 16 / 9, shrink: 0, align: "center", justify: "center" }}>
+        <Image
+          src={poster}
+          fit="cover"
+          style={{ position: "absolute", inset: 0, radius: [s(10) - 1, s(10) - 1, 0, 0] }}
+        />
+        <View style={{ size: s(40), radius: s(20), background: "#000000a0", align: "center", justify: "center" }}>
+          <Icon svg={play} size={s(18)} color="#fff" />
+        </View>
+        {#if media.duration !== null}
+          <Text
+            style={{ position: "absolute", right: s(8), bottom: s(8), fontSize: s(10.5), color: "#fff", background: "#000000a0", radius: s(4), paddingX: s(5), paddingY: s(2) }}
+          >
+            {duration(media.duration)}
+          </Text>
+        {/if}
+      </View>
+    {/if}
+    {#if zoom >= 0.45}
+      <View style={{ direction: "row", align: "center", gap: s(6), padding: [s(8), s(10)] }}>
+        <Icon svg={pdf ? filePdf : fileVideo} size={s(13)} color={c.faint} />
+        <Text style={{ flex: 1, fontSize: s(12), truncate: true }}>{item.title}</Text>
+        {#if pdf && media.pages !== null}
+          <Text style={{ fontSize: s(11), color: c.faint, nowrap: true }}>{pages(media.pages)}</Text>
+        {/if}
+      </View>
     {/if}
   </View>
 {:else if item.kind === "file"}

@@ -81,6 +81,10 @@ order: { doing: [<note id>, …] }
 - **GitHub mirror:** `gh_repos`, `gh_issues`, `gh_comments`
 - **Sync:** `gh_base`, `outbox`, `conflicts` (the only tables that can't be rebuilt)
 - **Link previews:** `link_previews`, with their images in `.neoworks-projects/previews/`
+
+PDF and video posters are not in `cache.db`: each is `<key>.png` with a `<key>.json` beside it
+(page count or length, or the error) in `.neoworks-projects/previews/`, the key hashing the
+file's path, size and modification time.
 - **Other:** `jobs`, `chats`
 
 ## Plugin services
