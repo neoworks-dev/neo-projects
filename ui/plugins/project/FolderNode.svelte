@@ -7,17 +7,29 @@
   import { icons } from "../../lib/icons.ts";
   import { c, ring, stateTransition, stickyTint } from "../../lib/theme.ts";
 
-  // `open` while its contents are unfolded beside it, `target` while a dragged node would go in.
+  // `height` is the node's, in world units. `open` while its contents are unfolded beside it,
+  // `target` while a dragged node would go in.
   let {
     item,
     zoom,
+    height,
     selected,
     open,
     target,
-  }: { item: Extract<Item, { kind: "folder" }>; zoom: number; selected: boolean; open: boolean; target: boolean } =
-    $props();
+  }: {
+    item: Extract<Item, { kind: "folder" }>;
+    zoom: number;
+    height: number;
+    selected: boolean;
+    open: boolean;
+    target: boolean;
+  } = $props();
+
+  /** Below this height (world units) nothing has room to peek out, and the folder is its front. */
+  const PEEK_HEIGHT = 120;
 
   const s = (n: number) => n * zoom;
+  const peeking = $derived(height >= PEEK_HEIGHT);
   const line = $derived(selected || target ? c.accent : open ? c.borderStrong : c.border);
   const count = $derived(item.count === 1 ? "1 item" : `${item.count} items`);
 
@@ -41,7 +53,8 @@
       top: s(16 + index * 11),
       left: s(14 + index * 12),
       right: s(14 + (item.peek.length - 1 - index) * 12),
-      height: s(96),
+      // Down behind the front, however tall the folder is.
+      bottom: s(14),
       radius: s(8),
       background: sticky ? sticky.background : c.surface,
       borderWidth: 1,
@@ -71,52 +84,56 @@
 {/snippet}
 
 <View style={{ flex: 1 }}>
-  <!-- The back, then its tab over the back's top edge, open at the bottom so the two are one. -->
+  {#if peeking}
+    <!-- The back, then its tab over the back's top edge, open at the bottom so the two are one. -->
+    <View
+      style={{
+        position: "absolute",
+        top: s(10),
+        left: 0,
+        right: 0,
+        bottom: 0,
+        radius: [0, s(12), s(12), s(12)],
+        background: c.raised,
+        borderWidth: 1,
+        borderColor: line,
+        shadow: selected ? ring : null,
+        transition: stateTransition,
+      }}
+    />
+    <View
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: s(84),
+        height: s(10) + 1,
+        radius: [s(10), s(10), 0, 0],
+        background: c.raised,
+        borderWidth: [1, 1, 0, 1],
+        borderColor: line,
+        transition: stateTransition,
+      }}
+    />
+    {#each item.peek as peek, index (index)}
+      {@render card(peek, index)}
+    {/each}
+  {/if}
+  <!-- The front, over the lower half of what peeks out, or the whole folder when nothing does. -->
   <View
     style={{
       position: "absolute",
-      top: s(10),
       left: 0,
       right: 0,
       bottom: 0,
-      radius: [0, s(12), s(12), s(12)],
-      background: c.raised,
-      borderWidth: 1,
-      borderColor: line,
-      shadow: selected ? ring : null,
-      transition: stateTransition,
-    }}
-  />
-  <View
-    style={{
-      position: "absolute",
-      top: 0,
-      left: 0,
-      width: s(84),
-      height: s(10) + 1,
-      radius: [s(10), s(10), 0, 0],
-      background: c.raised,
-      borderWidth: [1, 1, 0, 1],
-      borderColor: line,
-      transition: stateTransition,
-    }}
-  />
-  {#each item.peek as peek, index (index)}
-    {@render card(peek, index)}
-  {/each}
-  <!-- The front, over the lower half of what peeks out. -->
-  <View
-    style={{
-      position: "absolute",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: "46%",
+      top: peeking ? undefined : 0,
+      height: peeking ? "46%" : undefined,
       radius: s(12),
       background: target ? c.hover : c.surface,
       borderWidth: 1,
       borderColor: line,
-      justify: "end",
+      shadow: selected && !peeking ? ring : null,
+      justify: peeking ? "end" : "center",
       gap: s(2),
       padding: s(12),
       transition: stateTransition,

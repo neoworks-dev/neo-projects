@@ -152,7 +152,7 @@
     </View>
   </View>
 {:else if item.kind === "folder"}
-  <FolderNode {item} {zoom} {selected} {open} {target} />
+  <FolderNode {item} {zoom} {height} {selected} {open} {target} />
 {:else if item.kind === "localboard"}
   <LocalBoard {item} {zoom} {selected} />
 {:else if item.kind === "text"}
