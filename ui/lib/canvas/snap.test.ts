@@ -35,11 +35,11 @@ describe("snap", () => {
     expect(guides).toEqual([{ snaps: "x", axis: "x", at: 200, from: 360, to: 420 }]);
   });
 
-  test("beside another node, it snaps to sit SPACING from it, the guide across the space", () => {
-    // Right of a node ending at 100, 27 away: it moves 3 left to leave 24, and the tops differ.
+  test("beside another node, it snaps to sit SPACING from it, the guide down the middle of the space", () => {
+    // Right of a node ending at 100, 27 away: it moves 3 left to leave 24. They overlap from 30 to 60.
     const right = snap(box(127, 30), [box(0, 0)], 8);
     expect(right.dx).toBe(-3);
-    expect(right.guides).toContainEqual({ snaps: "x", axis: "y", at: 45, from: 100, to: 124 });
+    expect(right.guides).toContainEqual({ snaps: "x", axis: "x", at: 112, from: 30, to: 60 });
     // Above one starting at 200, 20 away: it moves 4 up.
     expect(snap(box(500, 120), [box(530, 200)], 8).dy).toBe(-4);
   });

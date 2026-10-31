@@ -77,8 +77,8 @@ function alignments(moving: Rect, other: Rect, axis: "x" | "y"): Match[] {
 
 /**
  * Ways to leave `SPACING` between `moving` and `other` along `axis`, on either side of it, when
- * they sit beside each other: overlapping across the axis. The guide crosses the space at the
- * middle of where they overlap.
+ * they sit beside each other: overlapping across the axis. The guide runs down the middle of the
+ * space, along where they overlap.
  */
 function spacings(moving: Rect, other: Rect, axis: "x" | "y"): Match[] {
   const across = otherAxis(axis);
@@ -86,9 +86,9 @@ function spacings(moving: Rect, other: Rect, axis: "x" | "y"): Match[] {
   const [own0, own1] = span(moving, axis);
   const [other0, other1] = span(other, axis);
   const guide = (placed: Rect) => {
-    const [overlap0, overlap1] = between(placed, other, across);
-    const [from, to] = between(placed, other, axis);
-    return { snaps: axis, axis: across, at: (overlap0 + overlap1) / 2, from, to };
+    const [space0, space1] = between(placed, other, axis);
+    const [from, to] = between(placed, other, across);
+    return { snaps: axis, axis, at: (space0 + space1) / 2, from, to };
   };
   const after = other1 + SPACING - own0;
   const before = other0 - SPACING - own1;
