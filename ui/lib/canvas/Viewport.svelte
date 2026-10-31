@@ -71,6 +71,8 @@
     type Side,
   } from "./geometry.ts";
   import Ink from "./Ink.svelte";
+  import { snap, type Guide } from "./snap.ts";
+  import { bounds } from "./unfold.ts";
 
   interface Props {
     nodes: N[];
@@ -140,6 +142,8 @@
   let drag = $state<{
     id: string;
     starts: Map<string, Point>;
+    /** The box around all of them where they started. */
+    box: Rect;
     dx: number;
     dy: number;
     from: Point;
@@ -149,6 +153,10 @@
   /** The background being dragged: where the view and the pointer were when it started. */
   let pan: { view: ViewState; from: Point } | null = null;
   let panning = $state(false);
+  /** The lines the dragged nodes are aligned on with others, in world coordinates. */
+  let guides = $state<Guide[]>([]);
+  /** How close an edge or centre comes to another's, in screen pixels, before it snaps to it. */
+  const SNAP = 6;
   /**
    * A selection box being dragged on the background, from `from` to `to` (viewport coordinates),
    * and what was selected before it, which Shift keeps.
@@ -380,22 +388,32 @@
       onselect?.(group);
     }
     if (!movable(n)) return;
-    const starts = new Map<string, Point>();
-    for (const m of shown) {
-      if (group.includes(m.id) && movable(m)) starts.set(m.id, { x: m.x, y: m.y });
-    }
-    drag = { id: n.id, starts, dx: 0, dy: 0, from: { x: e.windowX, y: e.windowY }, moved: false, shift: e.shift };
+    const moving = shown.filter((m) => group.includes(m.id) && movable(m));
+    const starts = new Map(moving.map((m): [string, Point] => [m.id, { x: m.x, y: m.y }]));
+    const box = bounds(moving);
+    if (!box) return;
+    drag = { id: n.id, starts, box, dx: 0, dy: 0, from: { x: e.windowX, y: e.windowY }, moved: false, shift: e.shift };
   }
 
   function nodeMove(e: PointerEvent) {
     track(e);
     if (!drag) return;
-    const { windowX, windowY } = e;
+    const { windowX, windowY, alt } = e;
     later(() => {
       if (!drag) return;
-      const dx = (windowX - drag.from.x) / zoom;
-      const dy = (windowY - drag.from.y) / zoom;
+      let dx = (windowX - drag.from.x) / zoom;
+      let dy = (windowY - drag.from.y) / zoom;
       const moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 3 / zoom;
+      // The nodes' edges and centres snap to those of the nodes in view; Alt places them freely.
+      guides = [];
+      if (moved && !alt) {
+        const starts = drag.starts;
+        const others = visible.filter((m) => !starts.has(m.id));
+        const aligned = snap({ ...drag.box, x: drag.box.x + dx, y: drag.box.y + dy }, others, SNAP / zoom);
+        dx += aligned.dx;
+        dy += aligned.dy;
+        guides = aligned.guides;
+      }
       drag = { ...drag, dx: Math.round(dx), dy: Math.round(dy), moved };
       const start = drag.starts.get(drag.id);
       if (moved && start) ondrag?.(drag.id, start.x + drag.dx, start.y + drag.dy);
@@ -406,6 +424,7 @@
     flush();
     const done = drag;
     drag = null;
+    guides = [];
     if (!done) return;
     if (done.moved) {
       const moves = [...done.starts].map(([id, start]) => ({ id, x: start.x + done.dx, y: start.y + done.dy }));
@@ -595,6 +614,13 @@
             onup={resizeUp}
           />
         {/each}
+      {/if}
+    {/each}
+    {#each guides as guide (`${guide.axis}${guide.at}`)}
+      {#if guide.axis === "x"}
+        <View style={{ position: "absolute", left: guide.at * zoom, top: guide.from * zoom, width: 1, height: (guide.to - guide.from) * zoom, background: c.accent }} />
+      {:else}
+        <View style={{ position: "absolute", left: guide.from * zoom, top: guide.at * zoom, width: (guide.to - guide.from) * zoom, height: 1, background: c.accent }} />
       {/if}
     {/each}
   </View>
