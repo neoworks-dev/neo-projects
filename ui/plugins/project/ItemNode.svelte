@@ -42,6 +42,11 @@
   } = $props();
 
   const excerpt = $derived(item.kind === "note" ? plainText(item.excerpt, 240) : "");
+  /** The height left for a note's excerpt, and how many of its lines fit there. `onresize`
+   *  measures in window pixels, so the room is divided by `zoom` to compare it with the
+   *  world-unit line height. */
+  let excerptRoom = $state(0);
+  const excerptLines = $derived(Math.floor(excerptRoom / zoom / 18));
   const frame = $derived({
     flex: 1,
     radius: 10,
@@ -66,10 +71,18 @@
         <Text style={{ fontSize: 11, color: c.faint }}>Note</Text>
       </View>
     {/if}
-    <Text style={{ fontSize: zoom < 0.45 ? 26 : 16, lineHeight: zoom < 0.45 ? 30 : 21, color: c.text, maxLines: 2 }}>{item.title}</Text>
+    <!-- The card's height is the node's: the title keeps its lines, and the excerpt takes what
+         room is left in whole lines, so nothing is cut through the middle. -->
+    <Text style={{ fontSize: zoom < 0.45 ? 26 : 16, lineHeight: zoom < 0.45 ? 30 : 21, color: c.text, maxLines: 2, shrink: 0 }}>
+      {item.title}
+    </Text>
     {#if zoom >= 0.45}
       {#if excerpt}
-        <Text style={{ fontSize: 12.5, color: c.muted, lineHeight: 18 }}>{excerpt}</Text>
+        <View style={{ flex: 1, minHeight: 0 }} onresize={(l) => (excerptRoom = l.height)}>
+          {#if excerptLines > 0}
+            <Text style={{ fontSize: 12.5, color: c.muted, lineHeight: 18, maxLines: excerptLines }}>{excerpt}</Text>
+          {/if}
+        </View>
       {:else}
         <Text style={{ fontSize: 12.5, color: c.faint, lineHeight: 18 }}>Empty. Double-click to write.</Text>
       {/if}
