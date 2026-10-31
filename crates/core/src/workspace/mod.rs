@@ -6,6 +6,7 @@
 
 pub mod board;
 pub mod canvas;
+pub mod folders;
 pub mod index;
 pub mod issues;
 pub mod note;
@@ -106,6 +107,11 @@ impl Workspace {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// `path` relative to the workspace, with forward slashes, as canvases name files.
+    pub fn rel(&self, path: &Path) -> String {
+        path.strip_prefix(&self.root).unwrap_or(path).to_string_lossy().replace('\\', "/")
     }
 
     /// `<root>/.neoworks-projects`.

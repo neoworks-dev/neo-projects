@@ -112,6 +112,28 @@ pub fn folder_of(path: &Path) -> Option<&Path> {
     path.parent().filter(|dir| folder_canvas_path(dir) == path)
 }
 
+impl Canvas {
+    /// The first place in a grid of four columns where a `w` × `h` node overlaps nothing.
+    pub fn free_spot(&self, w: f64, h: f64) -> (f64, f64) {
+        let gap = 40.0;
+        for row in 0..200 {
+            for col in 0..4 {
+                let (x, y) = (col as f64 * (w + gap), row as f64 * (h + gap));
+                let hit = self.nodes.iter().any(|n| {
+                    x < n.x + n.width + gap / 2.0
+                        && n.x < x + w + gap / 2.0
+                        && y < n.y + n.height + gap / 2.0
+                        && n.y < y + h + gap / 2.0
+                });
+                if !hit {
+                    return (x, y);
+                }
+            }
+        }
+        (0.0, 0.0)
+    }
+}
+
 /// Writes pretty JSON indented with tabs, through a temp file and a rename.
 pub fn write_canvas(path: &Path, canvas: &Canvas) -> Result<()> {
     let mut out = Vec::new();

@@ -24,7 +24,7 @@ const PROJECT_W: f64 = 320.0;
 const PROJECT_H: f64 = 230.0;
 
 pub fn rel(ws: &Workspace, path: &Path) -> String {
-    path.strip_prefix(ws.root()).unwrap_or(path).to_string_lossy().replace('\\', "/")
+    ws.rel(path)
 }
 
 fn new_id() -> String {
@@ -82,7 +82,7 @@ pub fn overview(ws: &Workspace, cache: &Cache) -> Result<(PathBuf, Value)> {
     let mut missing: Vec<&Project> = by_note.into_values().collect();
     missing.sort_by(|a, b| a.name.cmp(&b.name));
     for p in missing {
-        let (x, y) = free_spot(&canvas, PROJECT_W, PROJECT_H);
+        let (x, y) = canvas.free_spot(PROJECT_W, PROJECT_H);
         canvas.nodes.push(Node {
             id: new_id(),
             kind: "file".into(),
@@ -136,25 +136,6 @@ pub fn overview(ws: &Workspace, cache: &Cache) -> Result<(PathBuf, Value)> {
         path.clone(),
         json!({"path": rel(ws, &path), "nodes": nodes, "arrows": arrows, "projects": projects, "errors": errors}),
     ))
-}
-
-pub(crate) fn free_spot(canvas: &Canvas, w: f64, h: f64) -> (f64, f64) {
-    let gap = 40.0;
-    for row in 0..200 {
-        for col in 0..4 {
-            let (x, y) = (col as f64 * (w + gap), row as f64 * (h + gap));
-            let hit = canvas.nodes.iter().any(|n| {
-                x < n.x + n.width + gap / 2.0
-                    && n.x < x + w + gap / 2.0
-                    && y < n.y + n.height + gap / 2.0
-                    && n.y < y + h + gap / 2.0
-            });
-            if !hit {
-                return (x, y);
-            }
-        }
-    }
-    (0.0, 0.0)
 }
 
 pub fn find_project(ws: &Workspace, folder: &str) -> Result<Project> {
@@ -502,30 +483,4 @@ pub fn save(ws: &Workspace, cache: &Cache, path: &Path, nodes: &[Value]) -> Resu
         })
         .collect();
     write_canvas(path, &canvas)
-}
-
-/// Every canvas in the workspace that names `old` (a workspace-relative path), or a file below it
-/// when it is a directory, now names `new`.
-pub fn rename_in_canvases(ws: &Workspace, old: &str, new: &str) -> Result<Vec<PathBuf>> {
-    let mut touched = Vec::new();
-    let below = format!("{old}/");
-    for path in ws.files().into_iter().filter(|p| p.extension().is_some_and(|e| e == "canvas")) {
-        let Ok(mut canvas) = read_canvas(&path) else { continue };
-        let mut changed = false;
-        for node in &mut canvas.nodes {
-            let Some(file) = node.file.as_deref() else { continue };
-            if file == old {
-                node.file = Some(new.to_string());
-                changed = true;
-            } else if let Some(rest) = file.strip_prefix(&below) {
-                node.file = Some(format!("{new}/{rest}"));
-                changed = true;
-            }
-        }
-        if changed {
-            write_canvas(&path, &canvas)?;
-            touched.push(path);
-        }
-    }
-    Ok(touched)
 }

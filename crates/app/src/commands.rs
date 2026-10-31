@@ -278,7 +278,7 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
             open.wrote(&from);
             open.wrote(&to);
             workspace::rename_path(&ws, &open.cache(), &from, &to).map_err(fail)?;
-            for path in canvas::rename_in_canvases(&ws, &rel(&ws, &from), &rel(&ws, &to)).map_err(fail)? {
+            for path in workspace::folders::rename_in_canvases(&ws, &rel(&ws, &from), &rel(&ws, &to)).map_err(fail)? {
                 open.wrote(&path);
             }
             app.emitter.emit("changed", json!({"reason": "rename"}));
