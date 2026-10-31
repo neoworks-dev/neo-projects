@@ -62,7 +62,7 @@
     type PointerEvent,
     type WheelEvent,
   } from "@neoworks/svelte-gpui/ui";
-  import type { Snippet } from "svelte";
+  import { untrack, type Snippet } from "svelte";
   import { fly } from "svelte/transition";
   import { c } from "../theme.ts";
   import {
@@ -231,7 +231,14 @@
     dotHot = false;
   }
 
-  const zoom = $derived(view.zoom);
+  // The zoom is state of its own, written only when it changes. Derived from `view`, every style
+  // in every node that reads it would be checked again on each frame of a pan, which replaces the
+  // view to move it, only to find the zoom the same.
+  let zoom = $state(untrack(() => view.zoom));
+  $effect.pre(() => {
+    const next = view.zoom;
+    if (next !== untrack(() => zoom)) zoom = next;
+  });
   const toWorld = (p: Point): Point => ({ x: p.x / zoom + view.x, y: p.y / zoom + view.y });
 
   // Nodes sit in one layer at world position times zoom, and panning only moves that layer, so a
@@ -271,30 +278,30 @@
     );
   });
 
-  // An arrow's path is kept while neither end moved, so a drag only redraws the arrows on the
-  // dragged node: a new array would make every arrow's canvas draw again.
-  let paths = new Map<string, { key: string; points: Point[]; mid: Point }>();
+  // An arrow's entry is kept, the same object, while neither end moved, so a drag only redraws the
+  // arrows on the dragged node. A new entry counts as a change to its arrow even when its points
+  // are the same, and every arrow's canvas would draw again.
+  let paths = new Map<string, { key: string; arrow: A; points: Point[]; mid: Point }>();
 
   /** Arrows in layer coordinates (world times zoom), with their midpoints for labels. */
   const lines = $derived.by(() => {
-    const next = new Map<string, { key: string; points: Point[]; mid: Point }>();
-    const out = arrows.flatMap((a) => {
+    const next = new Map<string, { key: string; arrow: A; points: Point[]; mid: Point }>();
+    for (const a of arrows) {
       const from = byId.get(a.from);
       const to = byId.get(a.to);
-      if (!from || !to) return [];
+      if (!from || !to) continue;
       const key = `${from.x},${from.y},${from.w},${from.h},${to.x},${to.y},${to.w},${to.h},${zoom}`;
-      let path = paths.get(a.id);
-      if (path?.key !== key) {
+      let line = paths.get(a.id);
+      if (line?.key !== key || line.arrow !== a) {
         const world = arrowPath(from, to);
-        if (!world) return [];
+        if (!world) continue;
         const points = world.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
-        path = { key, points, mid: midpoint(points) };
+        line = { key, arrow: a, points, mid: midpoint(points) };
       }
-      next.set(a.id, path);
-      return [{ arrow: a, points: path.points, mid: path.mid }];
-    });
+      next.set(a.id, line);
+    }
     paths = next;
-    return out;
+    return [...next.values()];
   });
 
   /** The arrows being drawn, one from each node they start at, in layer coordinates. */
@@ -411,6 +418,8 @@
     }
     pan = { view: { ...view }, from: { x: e.windowX, y: e.windowY } };
     panning = true;
+    // The arrow dot stays in while panning: sliding out at every node passed would build it each time.
+    nearby = null;
   }
 
   /** Selects what was kept and every node the box touches. */
@@ -438,9 +447,11 @@
       });
       return;
     }
-    track(e);
     const start = pan;
-    if (!start) return;
+    if (!start) {
+      track(e);
+      return;
+    }
     const { windowX, windowY } = e;
     later(() => {
       view = {
