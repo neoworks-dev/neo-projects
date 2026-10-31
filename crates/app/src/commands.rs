@@ -14,6 +14,7 @@ use serde_json::{Map, Value, json};
 use svelte_gpui::{CommandError, Commands};
 
 use crate::canvas::{self, rel};
+use crate::folders;
 use crate::state::{App, Open, expand};
 
 type Answer = Result<Value, CommandError>;
@@ -54,10 +55,48 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         let open = app.get().map_err(fail)?;
         let ws = open.ws().clone();
         let project = canvas::find_project(&ws, arg(&args, "project")?).map_err(fail)?;
-        open.wrote(&canvas::project_canvas_path(&project));
-        let view = canvas::project_view(&ws, &open.cache(), arg(&args, "project")?).map_err(fail)?;
+        let inside = args["inside"].as_str();
+        let unfolded: Vec<String> =
+            args["unfolded"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+        open.wrote(&canvas::view_canvas_path(&ws, &project, inside).map_err(fail)?);
+        let view = canvas::project_view(&ws, &open.cache(), arg(&args, "project")?, inside, &unfolded).map_err(fail)?;
         open.previews.want_view(&view);
         Ok(view)
+    });
+    // A folder in `dir` (workspace-relative), with its canvas. Answers with its node.
+    command!("folder_create", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let dir = unique(&ws.root().join(arg(&args, "dir")?), &sanitize(arg(&args, "name")?), "");
+        std::fs::create_dir(&dir).map_err(|e| e.to_string())?;
+        let path = workspace::folder_canvas_path(&dir);
+        open.wrote(&path);
+        workspace::write_canvas(&path, &workspace::Canvas::default()).map_err(fail)?;
+        Ok(json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 220, "height": 170}))
+    });
+    // The node `node` of the canvas `from` moved onto the canvas `into` (both workspace-relative):
+    // into a folder, or out of one. `at` is where it goes, `[x, y]`, or where there is room.
+    command!("folder_put", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let root = open.ws().root().to_path_buf();
+        let from = root.join(arg(&args, "from")?);
+        let into = root.join(arg(&args, "into")?);
+        let at = match (args["at"][0].as_f64(), args["at"][1].as_f64()) {
+            (Some(x), Some(y)) => Some((x, y)),
+            _ => None,
+        };
+        folders::put(&open, &from, arg(&args, "node")?, &into, at).map_err(fail)?;
+        app.emitter.emit("changed", json!({"reason": "folder"}));
+        Ok(Value::Null)
+    });
+    // Answers with the folder's new directory, workspace-relative.
+    command!("folder_rename", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let dir = ws.root().join(arg(&args, "dir")?);
+        let to = folders::rename(&open, &dir, &sanitize(arg(&args, "name")?)).map_err(fail)?;
+        app.emitter.emit("changed", json!({"reason": "rename"}));
+        Ok(json!(rel(&ws, &to)))
     });
     command!("project_create", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
@@ -247,7 +286,7 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
             open.wrote(&from);
             open.wrote(&to);
             workspace::rename_path(&ws, &open.cache(), &from, &to).map_err(fail)?;
-            for path in canvas::rename_in_canvases(&ws, &rel(&ws, &from), &rel(&ws, &to)).map_err(fail)? {
+            for path in workspace::folders::rename_in_canvases(&ws, &rel(&ws, &from), &rel(&ws, &to)).map_err(fail)? {
                 open.wrote(&path);
             }
             app.emitter.emit("changed", json!({"reason": "rename"}));
@@ -349,11 +388,13 @@ fn sanitize(title: &str) -> String {
     if clean.is_empty() { "Untitled".into() } else { clean }
 }
 
+/// `<stem>.<ext>` in `folder`, numbered past the names taken. An empty `ext` names a folder.
 fn unique(folder: &Path, stem: &str, ext: &str) -> PathBuf {
-    let mut path = folder.join(format!("{stem}.{ext}"));
+    let name = |stem: String| if ext.is_empty() { stem } else { format!("{stem}.{ext}") };
+    let mut path = folder.join(name(stem.to_string()));
     let mut n = 2;
     while path.exists() {
-        path = folder.join(format!("{stem} {n}.{ext}"));
+        path = folder.join(name(format!("{stem} {n}")));
         n += 1;
     }
     path

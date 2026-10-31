@@ -2,7 +2,8 @@
 // again whenever `version` moves, which every "changed" event from the host does.
 import { api, onChanged, onSync, type SyncStatus } from "./api.ts";
 
-export type Route = { view: "overview" } | { view: "project"; project: string };
+/** `inside` is the directory of the folder open within the project, workspace-relative. */
+export type Route = { view: "overview" } | { view: "project"; project: string; inside?: string };
 
 export type Selection =
   | { kind: "issue"; node: string }

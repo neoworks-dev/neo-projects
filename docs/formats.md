@@ -66,6 +66,9 @@ Types: `relates`, `blocks`, `parent-of`, `derived-from`, `<plugin>:<name>`. Issu
 Notes and workspace files are `file` nodes; linked files, issues, chats and links are `link`
 nodes with their URL. Extras go under `"neoworks": {…}` (e.g. the edge's relation id), as a hint only.
 
+A folder is a directory in the project with a canvas inside named after it, and a `file` node
+pointing at that canvas: `Garden/Seeds/Seeds.canvas`. The folder's canvas has no board.
+
 ## `.board`
 
 ```yaml

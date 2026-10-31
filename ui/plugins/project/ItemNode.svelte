@@ -1,12 +1,13 @@
 <script lang="ts">
   // Everything on a project canvas that isn't the board: a note (a card), an image, a file (a PDF
-  // or video with its poster), a web link, an issue placed off the board, a local board. Drawn at
-  // `zoom`.
+  // or video with its poster), a web link, an issue placed off the board, a local board, a folder.
+  // Drawn at `zoom`.
   import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
   import { plainText } from "../../lib/markdown/plain.ts";
   import { c, ring } from "../../lib/theme.ts";
+  import FolderNode from "./FolderNode.svelte";
   import LocalBoard from "./LocalBoard.svelte";
   import { icons } from "../../lib/icons.ts";
   import { duration, pages } from "../../lib/media.ts";
@@ -14,8 +15,17 @@
   import { fileIcon } from "../../lib/fileIcons.ts";
   const { fileText, play } = icons;
 
-  // `width` and `height` are the node's, in world units.
-  let { item, zoom, selected, width, height }: { item: Item; zoom: number; selected: boolean; width: number; height: number } =
+  // `width` and `height` are the node's, in world units. `open` is a folder unfolded beside it,
+  // `target` one that a dragged node would go into.
+  let {
+    item,
+    zoom,
+    selected,
+    width,
+    height,
+    open = false,
+    target = false,
+  }: { item: Item; zoom: number; selected: boolean; width: number; height: number; open?: boolean; target?: boolean } =
     $props();
 
   const s = (n: number) => n * zoom;
@@ -141,6 +151,8 @@
       {/if}
     </View>
   </View>
+{:else if item.kind === "folder"}
+  <FolderNode {item} {zoom} {height} {selected} {open} {target} />
 {:else if item.kind === "localboard"}
   <LocalBoard {item} {zoom} {selected} />
 {:else if item.kind === "text"}

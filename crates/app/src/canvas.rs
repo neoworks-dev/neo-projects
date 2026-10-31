@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 use np_core::media::{self, Media};
 use np_core::previews::{self, Preview};
 use np_core::views;
-use np_core::workspace::{self, Canvas, Node, Project, Uri, Workspace, issues, read_canvas, read_note, write_canvas};
+use np_core::workspace::{
+    self, Canvas, Node, Project, Uri, Workspace, folder_canvas_path, folder_of, issues, read_canvas, read_note,
+    write_canvas,
+};
 use np_core::{Cache, Error, Result};
 use rusqlite::OptionalExtension;
 use serde_json::{Map, Value, json};
@@ -21,7 +24,7 @@ const PROJECT_W: f64 = 320.0;
 const PROJECT_H: f64 = 230.0;
 
 pub fn rel(ws: &Workspace, path: &Path) -> String {
-    path.strip_prefix(ws.root()).unwrap_or(path).to_string_lossy().replace('\\', "/")
+    ws.rel(path)
 }
 
 fn new_id() -> String {
@@ -79,7 +82,7 @@ pub fn overview(ws: &Workspace, cache: &Cache) -> Result<(PathBuf, Value)> {
     let mut missing: Vec<&Project> = by_note.into_values().collect();
     missing.sort_by(|a, b| a.name.cmp(&b.name));
     for p in missing {
-        let (x, y) = free_spot(&canvas, PROJECT_W, PROJECT_H);
+        let (x, y) = canvas.free_spot(PROJECT_W, PROJECT_H);
         canvas.nodes.push(Node {
             id: new_id(),
             kind: "file".into(),
@@ -135,25 +138,6 @@ pub fn overview(ws: &Workspace, cache: &Cache) -> Result<(PathBuf, Value)> {
     ))
 }
 
-fn free_spot(canvas: &Canvas, w: f64, h: f64) -> (f64, f64) {
-    let gap = 40.0;
-    for row in 0..200 {
-        for col in 0..4 {
-            let (x, y) = (col as f64 * (w + gap), row as f64 * (h + gap));
-            let hit = canvas.nodes.iter().any(|n| {
-                x < n.x + n.width + gap / 2.0
-                    && n.x < x + w + gap / 2.0
-                    && y < n.y + n.height + gap / 2.0
-                    && n.y < y + h + gap / 2.0
-            });
-            if !hit {
-                return (x, y);
-            }
-        }
-    }
-    (0.0, 0.0)
-}
-
 pub fn find_project(ws: &Workspace, folder: &str) -> Result<Project> {
     let (projects, _) = ws.projects();
     projects
@@ -166,11 +150,34 @@ pub fn project_canvas_path(p: &Project) -> PathBuf {
     p.folder.join(format!("{}.canvas", p.name))
 }
 
-/// A project's canvas with its board, the board's issues minus those placed on the canvas, and
-/// the arrows between what is placed.
-pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value> {
+/// The canvas a project view shows: the project's own, or with `inside` (a workspace-relative
+/// directory in the project) that folder's.
+pub fn view_canvas_path(ws: &Workspace, project: &Project, inside: Option<&str>) -> Result<PathBuf> {
+    let Some(inside) = inside else {
+        return Ok(project_canvas_path(project));
+    };
+    let dir = ws.root().join(inside);
+    if !dir.starts_with(&project.folder) || !dir.is_dir() {
+        return Err(Error::Other(format!("{inside} is not a folder of {}", project.name)));
+    }
+    Ok(folder_canvas_path(&dir))
+}
+
+/// A project's canvas with its board, the board's issues minus those placed on the canvas or in
+/// its folders, and the arrows between what is placed. Inside one of its folders, that folder's
+/// canvas, which has no board.
+///
+/// The folders whose node ids are in `unfolded` bring their nodes along, each with the id
+/// `<folder node id>/<its id>` and an `in` saying where it lives; arrows reach them too.
+pub fn project_view(
+    ws: &Workspace,
+    cache: &Cache,
+    folder: &str,
+    inside: Option<&str>,
+    unfolded: &[String],
+) -> Result<Value> {
     let project = find_project(ws, folder)?;
-    let path = project_canvas_path(&project);
+    let path = view_canvas_path(ws, &project, inside)?;
     let mut canvas = load(&path)?;
     let repo = project.repos.first().cloned();
     let repo_id = match repo.as_deref().and_then(|r| r.split_once('/')) {
@@ -182,7 +189,7 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
         None if repo.is_none() => ws.issue_board(&project),
         None => json!({"statusField": null, "columns": []}),
     };
-    if !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board")) {
+    if inside.is_none() && !canvas.nodes.iter().any(|n| neoworks_kind(n) == Some("board")) {
         // As wide as its columns need (Open and Closed until the first sync tells), never narrower.
         let columns = board["columns"].as_array().map_or(2, Vec::len).max(2) as f64;
         let mut extra = Map::new();
@@ -213,17 +220,37 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
         write_canvas(&path, &canvas)?;
     }
     let mut nodes = Vec::new();
-    let mut placed_issues = HashSet::new();
+    let mut inner = Vec::new();
+    let mut with_inner = canvas.clone();
     for node in &canvas.nodes {
         let mut v = serde_json::to_value(node)?;
-        let it = item(ws, cache, node)?;
-        if it["kind"] == "issue"
-            && let Some(id) = it["card"]["node"].as_str()
+        v["item"] = item(ws, cache, node)?;
+        nodes.push(v);
+        let Some(inner_canvas) = node.file.as_ref().map(|f| ws.root().join(f)).filter(|p| folder_of(p).is_some()) else {
+            continue;
+        };
+        for child in load(&inner_canvas)?.nodes {
+            let mut v = serde_json::to_value(&child)?;
+            v["item"] = item(ws, cache, &child)?;
+            if !unfolded.contains(&node.id) {
+                // Only for the board: an issue in a folder is placed, folded or not.
+                inner.push(v);
+                continue;
+            }
+            let id = format!("{}/{}", node.id, child.id);
+            v["in"] = json!({"folder": node.id, "canvas": rel(ws, &inner_canvas), "id": child.id});
+            v["id"] = json!(id);
+            with_inner.nodes.push(Node { id, ..child });
+            nodes.push(v);
+        }
+    }
+    let mut placed_issues = HashSet::new();
+    for v in nodes.iter().chain(&inner) {
+        if v["item"]["kind"] == "issue"
+            && let Some(id) = v["item"]["card"]["node"].as_str()
         {
             placed_issues.insert(id.to_string());
         }
-        v["item"] = it;
-        nodes.push(v);
     }
     if let Some(columns) = board["columns"].as_array_mut() {
         for column in columns {
@@ -232,7 +259,7 @@ pub fn project_view(ws: &Workspace, cache: &Cache, folder: &str) -> Result<Value
             }
         }
     }
-    let arrows = arrows(ws, cache, &canvas)?;
+    let arrows = arrows(ws, cache, &with_inner)?;
     let mut project = project_json(ws, cache, &project)?;
     project["repoId"] = json!(repo_id);
     Ok(json!({"path": rel(ws, &path), "project": project, "board": board, "nodes": nodes, "arrows": arrows}))
@@ -283,6 +310,9 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
             if rel_path.ends_with(".board") {
                 return local_board(ws, &path);
             }
+            if let Some(dir) = folder_of(&path) {
+                return folder_item(ws, cache, uri.map(|u| u.to_string()), dir, &path);
+            }
             if let Some(card) = local_issue_card(ws, &path) {
                 return Ok(json!({"kind": "issue", "uri": uri.map(|u| u.to_string()), "card": card}));
             }
@@ -315,6 +345,44 @@ fn aspect(path: &Path) -> Option<f64> {
         return None;
     }
     Some(size.width as f64 / size.height as f64)
+}
+
+/// How many of a folder's nodes peek out of it on the canvas.
+const PEEK: usize = 3;
+
+/// A folder by its canvas: its directory, workspace-relative, how many nodes it holds, and the
+/// first few of them, to peek out of it.
+fn folder_item(ws: &Workspace, cache: &Cache, uri: Option<String>, dir: &Path, canvas_path: &Path) -> Result<Value> {
+    if !dir.is_dir() {
+        return Ok(json!({"kind": "missing", "uri": uri, "title": "Folder not found"}));
+    }
+    let nodes = load(canvas_path).map(|c| c.nodes).unwrap_or_default();
+    let peek = nodes.iter().take(PEEK).map(|n| peek(ws, cache, n)).collect::<Result<Vec<_>>>()?;
+    let name = dir.file_name().unwrap_or_default().to_string_lossy();
+    Ok(json!({"kind": "folder", "uri": uri, "path": rel(ws, dir), "canvas": rel(ws, canvas_path), "title": name,
+              "count": nodes.len(), "peek": peek}))
+}
+
+/// What a folder shows of a node inside it: its kind, its name, and a picture when it has one. A
+/// folder inside shows only its name, so folders in folders aren't all read.
+fn peek(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
+    if let Some(dir) = node.file.as_ref().map(|f| ws.root().join(f)).as_deref().and_then(folder_of) {
+        return Ok(json!({"kind": "folder", "title": dir.file_name().unwrap_or_default().to_string_lossy()}));
+    }
+    let it = item(ws, cache, node)?;
+    let title = match it["kind"].as_str() {
+        Some("issue") => it["card"]["title"].clone(),
+        Some("text") => it["text"].clone(),
+        Some("link") => it["preview"]["title"].as_str().map_or(it["title"].clone(), |t| json!(t)),
+        _ => it["title"].clone(),
+    };
+    let image = match it["kind"].as_str() {
+        Some("image") => it["path"].clone(),
+        Some("file") => it["media"]["poster"].clone(),
+        Some("link") => it["preview"]["image"].clone(),
+        _ => Value::Null,
+    };
+    Ok(json!({"kind": it["kind"], "title": title, "image": image, "mime": it["mime"]}))
 }
 
 /// The card of the local issue a file is, if it is one.
@@ -472,24 +540,4 @@ pub fn save(ws: &Workspace, cache: &Cache, path: &Path, nodes: &[Value]) -> Resu
         })
         .collect();
     write_canvas(path, &canvas)
-}
-
-/// Every canvas in the workspace that names `old` (a workspace-relative path) now names `new`.
-pub fn rename_in_canvases(ws: &Workspace, old: &str, new: &str) -> Result<Vec<PathBuf>> {
-    let mut touched = Vec::new();
-    for path in ws.files().into_iter().filter(|p| p.extension().is_some_and(|e| e == "canvas")) {
-        let Ok(mut canvas) = read_canvas(&path) else { continue };
-        let mut changed = false;
-        for node in &mut canvas.nodes {
-            if node.file.as_deref() == Some(old) {
-                node.file = Some(new.to_string());
-                changed = true;
-            }
-        }
-        if changed {
-            write_canvas(&path, &canvas)?;
-            touched.push(path);
-        }
-    }
-    Ok(touched)
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
-  // The status bar's start: the workspace folder and, inside a project, its folder, as a path.
+  // The status bar's start: the workspace folder and, inside a project, its folder (or the folder
+  // open within it), as a path.
   import { Icon, Text } from "@neoworks/svelte-gpui/ui";
   import { app } from "../../lib/state.svelte.ts";
   import { c } from "../../lib/theme.ts";
@@ -9,7 +10,10 @@
   const parts = $derived.by(() => {
     const workspace = app.workspace?.split("/").filter(Boolean).pop();
     if (!workspace) return [];
-    if (app.route.view === "project") return [workspace, ...app.route.project.split("/").filter(Boolean)];
+    if (app.route.view === "project") {
+      const open = app.route.inside ?? app.route.project;
+      return [workspace, ...open.split("/").filter(Boolean)];
+    }
     return [workspace];
   });
 </script>

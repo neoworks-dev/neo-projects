@@ -8,6 +8,7 @@
 
 mod canvas;
 mod commands;
+mod folders;
 mod math;
 mod previews;
 mod state;

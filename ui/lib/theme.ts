@@ -59,6 +59,15 @@ export const ring: Shadow[] = [
 /** Easing for things that arrive: fast out, soft landing. */
 export const ease = { duration: 180, easing: "ease-out" } as const;
 
+/** How the design system's components ease a change of state, such as hover. */
+export const stateTransition = { duration: 300, easing: "ease-out" } as const;
+
+/**
+ * The design system's easing curves, as cubic bezier control points, for motion the window
+ * animates itself (`ui/lib/canvas/motion.ts`). `out` is for things that arrive or leave.
+ */
+export const easing = t.easing;
+
 /** GitHub's option colours (issue fields, our own Open/Closed). */
 export const tones: Record<string, string> = {
   GRAY: "#8b949e",

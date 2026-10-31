@@ -6,6 +6,7 @@
 
 pub mod board;
 pub mod canvas;
+pub mod folders;
 pub mod index;
 pub mod issues;
 pub mod note;
@@ -22,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub use board::{Board, BoardColumn, Column, Filter, board_notes, read_board, write_board};
-pub use canvas::{Canvas, Edge, Node, read_canvas, write_canvas};
+pub use canvas::{Canvas, Edge, Node, folder_canvas_path, folder_of, read_canvas, write_canvas};
 pub use index::{SearchHit, apply, index_all, index_path, mime_for, rename_path, search};
 pub use note::{Note, attach_file, create_note, ensure_id, read_note, read_props, rename_prop, set_prop, write_body};
 pub use project::{Project, ProjectError};
@@ -106,6 +107,11 @@ impl Workspace {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// `path` relative to the workspace, with forward slashes, as canvases name files.
+    pub fn rel(&self, path: &Path) -> String {
+        path.strip_prefix(&self.root).unwrap_or(path).to_string_lossy().replace('\\', "/")
     }
 
     /// `<root>/.neoworks-projects`.

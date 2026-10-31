@@ -82,6 +82,8 @@
     onpress?: (id: string) => void;
     onselectarrow?: (id: string | null) => void;
     onmoved?: (id: string, x: number, y: number) => void;
+    /** A node being dragged is now at `x`, `y`; `onmoved` follows when it is let go. */
+    ondrag?: (id: string, x: number, y: number) => void;
     onconnect?: (from: string, to: string) => void;
     onfiles?: (paths: string[], at: Point) => void;
     /** Which in-app drags the canvas takes, and what to do with one dropped at a world point. */
@@ -105,6 +107,7 @@
     onpress,
     onselectarrow,
     onmoved,
+    ondrag,
     onconnect,
     onfiles,
     accept = () => false,
@@ -312,6 +315,7 @@
       const dy = (windowY - drag.from.y) / zoom;
       const moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 3 / zoom;
       drag = { ...drag, x: Math.round(drag.start.x + dx), y: Math.round(drag.start.y + dy), moved };
+      if (moved) ondrag?.(drag.id, drag.x, drag.y);
     });
   }
 
