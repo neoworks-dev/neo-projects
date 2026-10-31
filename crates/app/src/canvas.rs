@@ -291,17 +291,29 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
     }
 }
 
-/// A link's preview with its images as absolute paths, for the window to draw.
+/// A link's preview with its images as absolute paths, for the window to draw, and the image's
+/// width divided by its height.
 fn preview_json(ws: &Workspace, preview: Preview) -> Value {
     let dir = crate::previews::dir(ws);
-    let path = |file: Option<String>| file.map(|f| dir.join(f).to_string_lossy().into_owned());
+    let image = preview.image.map(|f| dir.join(f));
+    let favicon = preview.favicon.map(|f| dir.join(f).to_string_lossy().into_owned());
     json!({
         "title": preview.title,
         "description": preview.description,
         "site": preview.site,
-        "image": path(preview.image),
-        "favicon": path(preview.favicon),
+        "imageAspect": image.as_deref().and_then(aspect),
+        "image": image.map(|p| p.to_string_lossy().into_owned()),
+        "favicon": favicon,
     })
+}
+
+/// An image file's width divided by its height, from its header.
+fn aspect(path: &Path) -> Option<f64> {
+    let size = imagesize::size(path).ok()?;
+    if size.height == 0 {
+        return None;
+    }
+    Some(size.width as f64 / size.height as f64)
 }
 
 /// The card of the local issue a file is, if it is one.

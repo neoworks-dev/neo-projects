@@ -109,6 +109,8 @@ export interface LinkPreview {
   description: string | null;
   site: string | null;
   image: string | null;
+  /** The image's width divided by its height, when it could be read. */
+  imageAspect: number | null;
   favicon: string | null;
 }
 

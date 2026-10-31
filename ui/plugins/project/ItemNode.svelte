@@ -69,13 +69,22 @@
 {:else if item.kind === "link"}
   <View style={frame}>
     {#if item.preview?.image}
-      <!-- The box clips: on a card too short for it, an image alone would draw over the text. -->
-      <View style={{ flex: 1, minHeight: 0, overflow: "hidden", background: c.bg }}>
-        <!-- A width of its own stops the host from holding the image to its natural proportions. -->
-        <Image src={item.preview.image} fit="cover" style={{ width: "full", height: "full" }} />
-      </View>
+      <!-- The card's overflow clips square, so the image rounds its own top corners. GPUI rounds
+           the image as drawn, not its box, so the box takes the image's proportions: a cover
+           image scaled past its box would have its rounded corners cut off. 1.91 is Open Graph's
+           recommended shape, for an image whose size couldn't be read. -->
+      <Image
+        src={item.preview.image}
+        fit="cover"
+        style={{
+          width: "full",
+          aspectRatio: item.preview.imageAspect ?? 1.91,
+          shrink: 0,
+          radius: [s(10) - 1, s(10) - 1, 0, 0],
+        }}
+      />
     {/if}
-    <View style={{ padding: s(12), gap: s(4), justify: "center", flex: item.preview?.image ? undefined : 1 }}>
+    <View style={{ padding: s(12), gap: s(4), justify: item.preview?.image ? "start" : "center", flex: 1 }}>
       <View style={{ direction: "row", align: "center", gap: s(6) }}>
         {#if item.preview?.favicon}
           <Image src={item.preview.favicon} fit="contain" style={{ width: s(12), height: s(12) }} />
