@@ -26,8 +26,8 @@
 <script lang="ts" generics="N extends VNode, A extends VArrow">
   // An infinite canvas: nodes placed in world coordinates, drawn at the view's zoom, with arrows
   // between them. Drag the background to pan, the wheel to pan, Ctrl+wheel to zoom. Drag a node to
-  // move it, or its sides and corners to resize it. Near a node, a dot slides out past each of its
-  // edges; drag one onto another node to connect them. Files
+  // move it, or its sides and corners to resize it. Near a node, a dot slides out past the edge
+  // nearest the pointer; drag it onto another node to connect them. Files
   // from other programs and in-app drags (a card from a board) can be dropped anywhere.
   import {
     DropTarget,
@@ -51,11 +51,12 @@
     handles,
     midpoint,
     near,
+    nearestSide,
     resized,
-    sides,
     type Handle,
     type Point,
     type Rect,
+    type Side,
   } from "./geometry.ts";
   import Ink from "./Ink.svelte";
 
@@ -118,22 +119,31 @@
   let panning = $state(false);
   /** An arrow being drawn: from which node, to where the pointer is (viewport coordinates). */
   let link = $state<{ from: string; to: Point } | null>(null);
-  const linkFrom = $derived(link?.from ?? null);
   let pointer: Point | null = null;
 
-  /** How close the pointer comes to a node, in screen pixels, before its arrow dots show. */
+  /** How close the pointer comes to a node, in screen pixels, before its arrow dot shows. */
   const NEAR = 20;
-  /** How far the dots slide out past the node's edges, in screen pixels. */
+  /** How far the dot slides out past the node's edge, in screen pixels. */
   const DOT_OUT = 16;
-  /** The node the pointer is near, whose arrow dots are out. */
-  let nearby = $state<string | null>(null);
+  /** The node the pointer is near and the side it is nearest, where the arrow dot is out. */
+  let nearby = $state<{ id: string; side: Side } | null>(null);
+  /** The pointer is on the dot's grab area, so a press there starts an arrow. */
+  let dotHot = $state(false);
 
   function track(e: PointerEvent) {
-    if (!linkable) return;
-    const found = near(shown, toWorld(local(e)), NEAR / zoom);
-    let id: string | null = null;
-    if (found) id = found.id;
-    if (id !== nearby) nearby = id;
+    if (!linkable || link) return;
+    const at = toWorld(local(e));
+    const found = near(shown, at, NEAR / zoom);
+    if (!found) {
+      if (nearby) nearby = null;
+      dotHot = false;
+      return;
+    }
+    const side = nearestSide(found, at);
+    if (nearby?.id === found.id && nearby.side === side) return;
+    // A dot taken away under the pointer never hears it leave.
+    nearby = { id: found.id, side };
+    dotHot = false;
   }
 
   const zoom = $derived(view.zoom);
@@ -428,10 +438,12 @@
       </View>
     {/each}
     {#each visible as n (n.id)}
-      {#if linkable && (linkFrom === n.id || (nearby === n.id && !drag && !resize))}
-        <!-- The dots for drawing an arrow, one per side, drawn before the node so they slide out
-             from under its edges. Each hit area is larger than its dot, so it is easy to grab. -->
-        {#each sides as side (side)}
+      {#if linkable && nearby?.id === n.id && !drag && !resize}
+        <!-- The dot for drawing an arrow, on the side nearest the pointer, drawn before the node
+             so it slides out from under that edge. Keyed by side: moving to another side slides
+             this one back in and the next one out. Its grab area is larger than the dot, and the
+             dot fills while the pointer is on it. -->
+        {#each [nearby.side] as side (side)}
           {@const dot = dotPoint(n, side, zoom, DOT_OUT)}
           <Presence
             in={[fly, { ...dot.back, duration: 160 }]}
@@ -440,13 +452,20 @@
           >
             <View
               style={{ size: 22, align: "center", justify: "center", cursor: "crosshair" }}
+              onhover={(inside) => (dotHot = inside)}
               ondown={(e) => linkDown(n, e)}
               onmove={linkMove}
               onup={linkUp}
             >
               <View
-                style={{ size: 11, radius: 6, background: c.surface, borderWidth: 2, borderColor: c.accent, transition: 120 }}
-                hover={{ background: c.accent }}
+                style={{
+                  size: 11,
+                  radius: 6,
+                  background: dotHot || link ? c.accent : c.surface,
+                  borderWidth: 2,
+                  borderColor: c.accent,
+                  transition: 120,
+                }}
               />
             </View>
           </Presence>

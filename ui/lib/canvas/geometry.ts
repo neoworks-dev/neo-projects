@@ -149,8 +149,6 @@ export function grabZone(r: Rect, handle: Handle, zoom: number): Rect {
 
 export type Side = "n" | "e" | "s" | "w";
 
-export const sides: Side[] = ["n", "e", "s", "w"];
-
 /**
  * Where the arrow dot on `side` of `r` sits once it is out, in screen pixels: `out` past the
  * middle of that side. `back` is the offset that tucks it under the node again.
@@ -161,6 +159,18 @@ export function dotPoint(r: Rect, side: Side, zoom: number, out: number): { at: 
   if (side === "s") return { at: { x: middle.x, y: (r.y + r.h) * zoom + out }, back: { x: 0, y: -out } };
   if (side === "w") return { at: { x: r.x * zoom - out, y: middle.y }, back: { x: out, y: 0 } };
   return { at: { x: (r.x + r.w) * zoom + out, y: middle.y }, back: { x: -out, y: 0 } };
+}
+
+/** The side of `r` that `at` is closest to, inside or outside it. */
+export function nearestSide(r: Rect, at: Point): Side {
+  const distances: [Side, number][] = [
+    ["n", Math.abs(at.y - r.y)],
+    ["e", Math.abs(at.x - (r.x + r.w))],
+    ["s", Math.abs(at.y - (r.y + r.h))],
+    ["w", Math.abs(at.x - r.x)],
+  ];
+  distances.sort((a, b) => a[1] - b[1]);
+  return distances[0][0];
 }
 
 /** The topmost of `nodes` (the last drawn) within `margin` of `at`, or null. */
