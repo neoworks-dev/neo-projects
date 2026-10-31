@@ -117,6 +117,8 @@
     ondrag?: (id: string, x: number, y: number) => void;
     /** An arrow drawn from the nodes `from` onto the node `to`. */
     onconnect?: (from: string[], to: string) => void;
+    /** A right press on a node, for the nodes `ids` it acts on, at a point in the window. */
+    oncontext?: (ids: string[], windowX: number, windowY: number) => void;
     onfiles?: (paths: string[], at: Point) => void;
     /** Which in-app drags the canvas takes, and what to do with one dropped at a world point. */
     accept?: (data: unknown) => boolean;
@@ -152,6 +154,7 @@
     onmoved,
     ondrag,
     onconnect,
+    oncontext,
     onfiles,
     accept = () => false,
     ondropdata,
@@ -471,7 +474,19 @@
     }
   }
 
+  /** A right press acts on the selection when the node is part of it, and else selects the node alone. */
+  function nodeContext(n: N, e: PointerEvent) {
+    let ids = [n.id];
+    if (selected.includes(n.id)) ids = selected;
+    else onselect?.(ids);
+    oncontext?.(ids, e.windowX, e.windowY);
+  }
+
   function nodeDown(n: N, e: PointerEvent) {
+    if (e.button === 2) {
+      nodeContext(n, e);
+      return;
+    }
     if (e.button !== 0) return;
     if (e.clicks === 2) {
       onopen?.(n.id);

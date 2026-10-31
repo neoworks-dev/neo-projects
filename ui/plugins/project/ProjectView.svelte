@@ -3,9 +3,10 @@
   // dragged out of the board, notes, files, links, local boards. Arrows are relationships: between
   // two issues they can be blocks or sub-issues on GitHub; anything else is kept in the workspace.
   import { clipboard } from "@neoworks/svelte-gpui";
-  import { Button, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { Button, ContextMenu, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
   import { fade, fly } from "svelte/transition";
   import type { Arrow, CanvasNode, Card, ProjectView, Stroke } from "../../lib/api.ts";
+  import { arranged, type Arrangement } from "../../lib/canvas/arrange.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
   import { flatPoints, pointsOf } from "../../lib/canvas/strokes.ts";
   import { cubicBezier, glide, tween } from "../../lib/canvas/motion.ts";
@@ -391,6 +392,52 @@
     save(data.nodes.map((n) => (n.id === id ? { ...n, x: rect.x, y: rect.y, width: rect.w, height: rect.h } : n)));
   }
 
+  let menu = $state<ContextMenu>();
+  let stopArrange: (() => void) | null = null;
+  const ARRANGE_MS = 280;
+
+  $effect(() => () => stopArrange?.());
+
+  /** The menu for a right press on several nodes: ways to lay them out. */
+  function context(ids: string[], x: number, y: number) {
+    if (ids.length < 2) return;
+    menu?.openAt(x, y, [
+      { label: "Arrange in grid", icon: icons.arrangeGrid, onselect: () => arrange(ids, "grid") },
+      { label: "Arrange in a row", icon: icons.arrangeRow, onselect: () => arrange(ids, "row") },
+      { label: "Arrange in a column", icon: icons.arrangeColumn, onselect: () => arrange(ids, "column") },
+    ]);
+  }
+
+  /**
+   * Lays the nodes `ids` out as `arrangement` says, gliding them there, then saves. The board and
+   * an unfolded folder's nodes stay where they are.
+   */
+  function arrange(ids: string[], arrangement: Arrangement) {
+    if (!data) return;
+    const own = data.nodes.filter((n) => ids.includes(n.id) && !n.in && n.item?.kind !== "board");
+    if (own.length < 2) return;
+    const starts = new Map(own.map((n) => [n.id, { x: n.x, y: n.y }]));
+    const spots = arranged(own.map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.width, h: n.height })), arrangement);
+    const placedAt = (t: number) => (n: CanvasNode) => {
+      const start = starts.get(n.id);
+      const spot = spots.get(n.id);
+      if (!start || !spot) return n;
+      return { ...n, x: Math.round(start.x + (spot.x - start.x) * t), y: Math.round(start.y + (spot.y - start.y) * t) };
+    };
+    stopArrange?.();
+    stopArrange = tween(
+      0,
+      1,
+      ARRANGE_MS,
+      (t) => {
+        if (data) data = { ...data, nodes: data.nodes.map(placedAt(easeOut(t))) };
+      },
+      () => {
+        if (data) save(data.nodes.map(placedAt(1)));
+      },
+    );
+  }
+
   /** Glides so every node is in view, above the toolbar. */
   function fit() {
     if (nodes.length === 0) return;
@@ -616,6 +663,7 @@
       ondrag={dragging}
       onpress={pressed}
       onconnect={(from, to) => (connecting = { from, to })}
+      oncontext={context}
       onfiles={(paths, at) => void files(paths, at)}
       accept={(d) => isCard(d) || isFileDrag(d)}
       ondropdata={dropped}
@@ -656,6 +704,8 @@
     </Viewport>
 
     <Toolbar {tools} bind:view {size} onfit={fit} />
+    <!-- Its menu doesn't grow for a row's icon, which cuts the longest label short. -->
+    <ContextMenu bind:this={menu} menuStyle={{ minWidth: 200 }} />
 
     {#if filesOpen}
       <Presence
