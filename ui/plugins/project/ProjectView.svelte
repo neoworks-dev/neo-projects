@@ -11,7 +11,18 @@
   import { contains, freeSpot, type Point, type Rect } from "../../lib/canvas/geometry.ts";
   import { flatPoints, pointsOf } from "../../lib/canvas/strokes.ts";
   import { cubicBezier, glide, tween } from "../../lib/canvas/motion.ts";
-  import { bounds, onTheWay, pushAside, rowsBox, stagger, unfoldLayout, type Folded } from "../../lib/canvas/unfold.ts";
+  import {
+    bounds,
+    outOf,
+    PEEK,
+    peekCard,
+    pushAside,
+    rowsBox,
+    shown,
+    stagger,
+    unfoldLayout,
+    type Folded,
+  } from "../../lib/canvas/unfold.ts";
   import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type DrawTool, type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
@@ -170,6 +181,8 @@
     /** Below 1 while held over a folder or falling in, shrunk towards `origin` from its top left. */
     scale?: number;
     origin?: Point;
+    /** An unfolded folder's: how far each card peeking out of it has gone, 0 to 1, as its thing comes out. */
+    gone?: number[];
   }
 
   /** The design system's easing for things that arrive and leave, and how long each takes. */
@@ -205,8 +218,8 @@
     return n.text ?? "";
   }
 
-  // The canvas's own nodes where they are, then the unfolded folder's on their way from under it
-  // to their rows beside it, one after the other in the rows' order. Own nodes in the rows' way
+  // The canvas's own nodes where they are, then the unfolded folder's on their way out of it to
+  // their rows beside it, one after the other in the rows' order. Own nodes in the rows' way
   // move aside while the folder is open; only a drag saves where they were pushed to. A node being
   // dragged out of the rows keeps no place in them.
   const laidOut = $derived.by<Placed[]>(() => {
@@ -219,17 +232,24 @@
     const inner = all.filter((n) => n.in?.folder === unfolded);
     const spots = unfoldLayout(folderNode, inner.filter((n) => n.id !== leaving).map(folded));
     const order = [...spots.keys()];
-    const laid = inner.map((n) => {
+    // The first few come out of the cards that peeked out of the folder, which fade as they go;
+    // the rest out of the frontmost card.
+    const gone: number[] = [];
+    const laid = inner.map((n, index) => {
       const spot = spots.get(n.id) ?? { x: n.x, y: n.y };
       const t = easeOut(stagger(spread, order.indexOf(n.id), order.length));
-      const at = onTheWay(folderNode, spot, n.width, n.height, t);
-      return { id: n.id, x: at.x, y: at.y, w: n.width, h: n.height, raw: n, opacity: t };
+      if (index < PEEK) gone.push(shown(t));
+      const card = peekCard(folderNode, Math.min(index, PEEK - 1));
+      const way = outOf(card, spot, n.width, t);
+      const origin = { x: 0, y: 0 };
+      return { id: n.id, x: way.x, y: way.y, w: n.width, h: n.height, raw: n, opacity: shown(t), scale: way.scale, origin };
     });
     const rows = rowsBox(spots, inner.map(folded));
     if (!rows) return [...own, ...laid];
     const offsets = pushAside(rows, own.filter((n) => n.id !== unfolded));
     const t = easeOut(spread);
     const pushed = own.map((n) => {
+      if (n.id === unfolded) return { ...n, gone };
       const offset = offsets.get(n.id);
       if (!offset) return n;
       return { ...n, x: n.x + offset.x * t, y: n.y + offset.y * t };
@@ -886,6 +906,7 @@
               open={unfolded === n.id}
               target={dropping?.folder === n.id || falling?.folder === n.id}
               opening={falling?.folder === n.id ? folderOpening(falling.progress) : 0}
+              gone={n.gone}
             />
           {/if}
         </View>

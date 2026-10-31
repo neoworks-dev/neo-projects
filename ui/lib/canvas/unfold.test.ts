@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bounds, onTheWay, pushAside, rowsBox, stagger, unfoldLayout } from "./unfold.ts";
+import { bounds, outOf, peekCard, pushAside, rowsBox, shown, stagger, unfoldLayout } from "./unfold.ts";
 
 const folder = { x: 0, y: 100, w: 220, h: 64 };
 
@@ -35,10 +35,23 @@ test("each thing sets off a little after the one before, and all arrive together
   expect(stagger(0.6, 39, 40)).toBeGreaterThan(0);
 });
 
-test("on the way, a thing starts centred under the folder and ends at its spot", () => {
-  expect(onTheWay(folder, { x: 268, y: 100 }, 20, 10, 0)).toEqual({ x: 100, y: 127 });
-  expect(onTheWay(folder, { x: 268, y: 100 }, 20, 10, 1)).toEqual({ x: 268, y: 100 });
-  expect(onTheWay(folder, { x: 268, y: 100 }, 20, 10, 0.5)).toEqual({ x: 184, y: 113.5 });
+test("each card peeking out of a folder is a little lower than the one behind it", () => {
+  const tall = { x: 0, y: 100, w: 220, h: 170 };
+  expect(peekCard(tall, 0)).toEqual({ x: 10, y: 100, w: 200, h: 156 });
+  expect(peekCard(tall, 2)).toEqual({ x: 10, y: 120, w: 200, h: 136 });
+});
+
+test("on the way out, a thing starts as its card and grows into its spot", () => {
+  const card = { x: 10, y: 100, w: 200, h: 156 };
+  expect(outOf(card, { x: 268, y: 100 }, 400, 0)).toEqual({ x: 10, y: 100, scale: 0.5 });
+  expect(outOf(card, { x: 268, y: 100 }, 400, 1)).toEqual({ x: 268, y: 100, scale: 1 });
+  expect(outOf(card, { x: 268, y: 100 }, 400, 0.5)).toEqual({ x: 139, y: 100, scale: 0.75 });
+});
+
+test("a thing fades in as its card fades out, early on its way", () => {
+  expect(shown(0)).toBe(0);
+  expect(shown(0.2)).toBeCloseTo(0.6);
+  expect(shown(0.5)).toBe(1);
 });
 
 test("the bounds hold every box", () => {
