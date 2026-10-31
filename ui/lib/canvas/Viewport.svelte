@@ -744,8 +744,9 @@
         {/each}
       {/if}
     {/each}
-    <!-- Keyed by axis, so a guide that moves to another line eases there instead of starting over. -->
-    {#each guides as guide (guide.axis)}
+    <!-- Keyed by the direction it snaps, so a guide that moves to another line eases there
+         instead of starting over. -->
+    {#each guides as guide (guide.snaps)}
       <GuideLine {guide} {zoom} />
     {/each}
   </View>

@@ -27,12 +27,25 @@ describe("snap", () => {
 
   test("one guide, across the gap between the two nodes", () => {
     const { guides } = snap(box(202, 300), [box(200, 0)], 8);
-    expect(guides).toEqual([{ axis: "x", at: 200, from: 60, to: 300 }]);
+    expect(guides).toEqual([{ snaps: "x", axis: "x", at: 200, from: 60, to: 300 }]);
   });
 
   test("of nodes on the same line, the guide goes to the nearest", () => {
     const { guides } = snap(box(202, 300), [box(200, 0), box(200, 420)], 8);
-    expect(guides).toEqual([{ axis: "x", at: 200, from: 360, to: 420 }]);
+    expect(guides).toEqual([{ snaps: "x", axis: "x", at: 200, from: 360, to: 420 }]);
+  });
+
+  test("beside another node, it snaps to sit SPACING from it, the guide across the space", () => {
+    // Right of a node ending at 100, 27 away: it moves 3 left to leave 24, and the tops differ.
+    const right = snap(box(127, 30), [box(0, 0)], 8);
+    expect(right.dx).toBe(-3);
+    expect(right.guides).toContainEqual({ snaps: "x", axis: "y", at: 45, from: 100, to: 124 });
+    // Above one starting at 200, 20 away: it moves 4 up.
+    expect(snap(box(500, 120), [box(530, 200)], 8).dy).toBe(-4);
+  });
+
+  test("spacing only counts beside a node, not diagonally off it", () => {
+    expect(snap(box(126, 300), [box(0, 0)], 8).dx).toBe(0);
   });
 
   test("nodes further away than the range are ignored", () => {
