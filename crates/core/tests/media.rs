@@ -33,6 +33,8 @@ fn pdfs_and_videos_get_previews_and_nothing_else_does() {
     assert_eq!(media::kind(Path::new("a/report.pdf")), Some(Kind::Pdf));
     assert_eq!(media::kind(Path::new("clip.MP4")), Some(Kind::Video));
     assert_eq!(media::kind(Path::new("clip.webm")), Some(Kind::Video));
+    assert_eq!(media::kind(Path::new("clip.avi")), Some(Kind::Video));
+    assert_eq!(media::kind(Path::new("clip.mkv")), Some(Kind::Video));
     assert_eq!(media::kind(Path::new("notes.md")), None);
 }
 

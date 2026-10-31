@@ -51,6 +51,8 @@ pub fn mime_for(path: &Path) -> &'static str {
         "mp4" => "video/mp4",
         "webm" => "video/webm",
         "mov" => "video/quicktime",
+        "avi" => "video/x-msvideo",
+        "mkv" => "video/x-matroska",
         "zip" => "application/zip",
         _ => "application/octet-stream",
     }
