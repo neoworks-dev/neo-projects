@@ -26,8 +26,8 @@
 <script lang="ts" generics="N extends VNode, A extends VArrow">
   // An infinite canvas: nodes placed in world coordinates, drawn at the view's zoom, with arrows
   // between them. Drag the background to pan, the wheel to pan, Ctrl+wheel to zoom. Drag a node to
-  // move it, or its sides and corners to resize it. Near a node, a dot slides out past its right
-  // edge; drag it onto another node to connect them. Files
+  // move it, or its sides and corners to resize it. Near a node, a dot slides out past each of its
+  // edges; drag one onto another node to connect them. Files
   // from other programs and in-app drags (a card from a board) can be dropped anywhere.
   import {
     DropTarget,
@@ -43,7 +43,20 @@
   import type { Snippet } from "svelte";
   import { fly } from "svelte/transition";
   import { c } from "../theme.ts";
-  import { arrowPath, contains, grabZone, handles, midpoint, near, resized, type Handle, type Point, type Rect } from "./geometry.ts";
+  import {
+    arrowPath,
+    contains,
+    dotPoint,
+    grabZone,
+    handles,
+    midpoint,
+    near,
+    resized,
+    sides,
+    type Handle,
+    type Point,
+    type Rect,
+  } from "./geometry.ts";
   import Ink from "./Ink.svelte";
 
   interface Props {
@@ -108,11 +121,11 @@
   const linkFrom = $derived(link?.from ?? null);
   let pointer: Point | null = null;
 
-  /** How close the pointer comes to a node, in screen pixels, before its arrow dot shows. */
-  const NEAR = 40;
-  /** How far the dot slides out past the node's right edge, in screen pixels. */
-  const DOT_OUT = 18;
-  /** The node the pointer is near, whose arrow dot is out. */
+  /** How close the pointer comes to a node, in screen pixels, before its arrow dots show. */
+  const NEAR = 20;
+  /** How far the dots slide out past the node's edges, in screen pixels. */
+  const DOT_OUT = 16;
+  /** The node the pointer is near, whose arrow dots are out. */
   let nearby = $state<string | null>(null);
 
   function track(e: PointerEvent) {
@@ -416,25 +429,28 @@
     {/each}
     {#each visible as n (n.id)}
       {#if linkable && (linkFrom === n.id || (nearby === n.id && !drag && !resize))}
-        <!-- The dot for drawing an arrow, drawn before the node so it slides out from under its
-             right edge. Its hit area is larger than the dot, so it is easy to grab. -->
-        <Presence
-          in={[fly, { x: -DOT_OUT, duration: 160 }]}
-          out={[fly, { x: -DOT_OUT, duration: 120 }]}
-          style={{ position: "absolute", left: (n.x + n.w) * zoom + DOT_OUT - 11, top: (n.y + n.h / 2) * zoom - 11 }}
-        >
-          <View
-            style={{ size: 22, align: "center", justify: "center", cursor: "crosshair" }}
-            ondown={(e) => linkDown(n, e)}
-            onmove={linkMove}
-            onup={linkUp}
+        <!-- The dots for drawing an arrow, one per side, drawn before the node so they slide out
+             from under its edges. Each hit area is larger than its dot, so it is easy to grab. -->
+        {#each sides as side (side)}
+          {@const dot = dotPoint(n, side, zoom, DOT_OUT)}
+          <Presence
+            in={[fly, { ...dot.back, duration: 160 }]}
+            out={[fly, { ...dot.back, duration: 120 }]}
+            style={{ position: "absolute", left: dot.at.x - 11, top: dot.at.y - 11 }}
           >
             <View
-              style={{ size: 11, radius: 6, background: c.surface, borderWidth: 2, borderColor: c.accent, transition: 120 }}
-              hover={{ background: c.accent }}
-            />
-          </View>
-        </Presence>
+              style={{ size: 22, align: "center", justify: "center", cursor: "crosshair" }}
+              ondown={(e) => linkDown(n, e)}
+              onmove={linkMove}
+              onup={linkUp}
+            >
+              <View
+                style={{ size: 11, radius: 6, background: c.surface, borderWidth: 2, borderColor: c.accent, transition: 120 }}
+                hover={{ background: c.accent }}
+              />
+            </View>
+          </Presence>
+        {/each}
       {/if}
       <View
         style={{ position: "absolute", left: n.x * zoom, top: n.y * zoom, width: n.w * zoom, height: n.h * zoom }}
