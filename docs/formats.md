@@ -80,7 +80,8 @@ order: { doing: [<note id>, …] }
 - **Index:** `files`, `notes`, `search` (FTS5), `thumbs`, `relations`
 - **GitHub mirror:** `gh_repos`, `gh_issues`, `gh_comments`
 - **Sync:** `gh_base`, `outbox`, `conflicts` (the only tables that can't be rebuilt)
-- **Link previews:** `link_previews`, with their images in `.neoworks-projects/previews/`
+- **Link previews:** `link_previews`, with their images in `.neoworks-projects/previews/`. A
+  failed page (`error`) or a failed image or icon (`image_error`) is fetched again after a day.
 
 PDF and video posters are not in `cache.db`: each is `<key>.png` with a `<key>.json` beside it
 (page count or length, or the error) in `.neoworks-projects/previews/`, the key hashing the

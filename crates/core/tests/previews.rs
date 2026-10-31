@@ -65,13 +65,41 @@ fn a_url_is_fetched_once_and_a_failure_shows_no_preview() {
     assert!(previews::wanted(&cache, ok).unwrap());
 
     let preview = Preview { title: Some("Example".into()), image: Some("abc-image.png".into()), ..Default::default() };
-    previews::store(&cache, ok, &preview, None).unwrap();
-    previews::store(&cache, broken, &Preview::default(), Some("connection refused")).unwrap();
+    previews::store(&cache, ok, &preview, None, None).unwrap();
+    previews::store(&cache, broken, &Preview::default(), Some("connection refused"), None).unwrap();
 
     assert!(!previews::wanted(&cache, ok).unwrap());
     assert!(!previews::wanted(&cache, broken).unwrap(), "a fresh failure waits before the next try");
     assert_eq!(previews::get_preview(&cache, ok).unwrap(), Some(preview));
     assert_eq!(previews::get_preview(&cache, broken).unwrap(), None);
+}
+
+#[test]
+fn a_page_whose_image_failed_is_fetched_again_a_day_later() {
+    let cache = Cache::open_in_memory().unwrap();
+    let url = "https://github.com/neoworks-dev/neo-projects";
+    let preview = Preview { title: Some("neo-projects".into()), ..Default::default() };
+    previews::store(&cache, url, &preview, None, Some("429 Too Many Requests")).unwrap();
+
+    assert!(!previews::wanted(&cache, url).unwrap(), "a fresh failure waits before the next try");
+    assert_eq!(previews::get_preview(&cache, url).unwrap(), Some(preview), "the page still shows meanwhile");
+
+    let two_days = 2 * 24 * 60 * 60 * 1000;
+    cache.conn().execute("UPDATE link_previews SET fetched = fetched - ?1", [two_days]).unwrap();
+    assert!(previews::wanted(&cache, url).unwrap());
+}
+
+#[test]
+fn a_version_3_cache_gains_the_image_error_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cache.db");
+    let cache = Cache::open(&path).unwrap();
+    cache.conn().execute_batch("ALTER TABLE link_previews DROP COLUMN image_error; PRAGMA user_version = 3;").unwrap();
+    drop(cache);
+
+    let cache = Cache::open(&path).unwrap();
+    previews::store(&cache, "https://example.com/", &Preview::default(), None, Some("timed out")).unwrap();
+    assert!(!previews::wanted(&cache, "https://example.com/").unwrap());
 }
 
 #[test]

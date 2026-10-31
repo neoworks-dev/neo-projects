@@ -505,7 +505,7 @@ mod tests {
         let v: String = cache.conn().query_row("SELECT value FROM meta WHERE key = 'k'", [], |r| r.get(0)).unwrap();
         assert_eq!(v, "v");
         let version: i64 = cache.conn().pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         cache.conn().execute("INSERT INTO search (uri, title, body) VALUES ('u', 't', 'hello world')", []).unwrap();
         drop(cache);
         assert!(Cache::open(&path).is_ok());
