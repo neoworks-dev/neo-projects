@@ -421,7 +421,7 @@ fn file_item(ws: &Workspace, uri: Option<String>, path: Option<PathBuf>) -> Valu
         return json!({"kind": "note", "uri": uri, "path": rel(ws, &path), "abs": path, "title": title, "excerpt": excerpt});
     }
     if mime.starts_with("image/") {
-        return json!({"kind": "image", "uri": uri, "path": path, "title": title});
+        return json!({"kind": "image", "uri": uri, "path": path, "title": title, "aspect": aspect(&path)});
     }
     let name = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let mut file = json!({"kind": "file", "uri": uri, "path": path, "title": name, "mime": mime});

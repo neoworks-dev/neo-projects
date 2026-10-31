@@ -76,11 +76,22 @@
     {/if}
   </View>
 {:else if item.kind === "image"}
-  <View style={{ ...frame, background: c.bg }}>
-    <Image src={item.path} fit="contain" style={{ flex: 1 }} />
-    {#if zoom >= 0.5}
-      <Text style={{ fontSize: 11, color: c.muted, padding: [4, 8], truncate: true }}>{item.title}</Text>
-    {/if}
+  {@const fitted = contain(width, height, item.aspect ?? 4 / 3)}
+  <!-- The image itself, at its own proportions inside the node, as a poster is. -->
+  <View style={{ flex: 1, align: "center", justify: "center" }}>
+    <View
+      style={{
+        width: fitted.w,
+        height: fitted.h,
+        radius: 8,
+        borderWidth: 1,
+        borderColor: selected ? c.accent : c.border,
+        shadow: selected ? ring : null,
+        transition: 140,
+      }}
+    >
+      <Image src={item.path} fit="fill" style={{ position: "absolute", inset: 0, radius: 8 - 1 }} />
+    </View>
   </View>
 {:else if item.kind === "file" && item.media?.poster}
   {@const media = item.media}
