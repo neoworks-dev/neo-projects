@@ -82,6 +82,7 @@
     type Rect,
     type Side,
   } from "./geometry.ts";
+  import GuideLine from "./GuideLine.svelte";
   import Ink from "./Ink.svelte";
   import { snap, type Guide } from "./snap.ts";
   import { thinned, touchesStroke } from "./strokes.ts";
@@ -741,12 +742,9 @@
         {/each}
       {/if}
     {/each}
-    {#each guides as guide (`${guide.axis}${guide.at}`)}
-      {#if guide.axis === "x"}
-        <View style={{ position: "absolute", left: guide.at * zoom, top: guide.from * zoom, width: 1, height: (guide.to - guide.from) * zoom, background: c.accent }} />
-      {:else}
-        <View style={{ position: "absolute", left: guide.from * zoom, top: guide.at * zoom, width: (guide.to - guide.from) * zoom, height: 1, background: c.accent }} />
-      {/if}
+    <!-- Keyed by axis, so a guide that moves to another line eases there instead of starting over. -->
+    {#each guides as guide (guide.axis)}
+      <GuideLine {guide} {zoom} />
     {/each}
   </View>
   {#if lassoBox}

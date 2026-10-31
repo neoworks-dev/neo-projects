@@ -25,15 +25,18 @@ describe("snap", () => {
     expect(snap(box(205, 300), [box(200, 0), box(207, 600)], 8).dx).toBe(2);
   });
 
-  test("a guide runs from one node to the other along the shared line", () => {
+  test("one guide, across the gap between the two nodes", () => {
     const { guides } = snap(box(202, 300), [box(200, 0)], 8);
-    expect(guides).toContainEqual({ axis: "x", at: 200, from: 0, to: 360 });
-    expect(guides).toContainEqual({ axis: "x", at: 250, from: 0, to: 360 });
-    expect(guides).toContainEqual({ axis: "x", at: 300, from: 0, to: 360 });
+    expect(guides).toEqual([{ axis: "x", at: 200, from: 60, to: 300 }]);
   });
 
-  test("nodes on the same line share one guide across all of them", () => {
-    const { guides } = snap(box(202, 300), [box(200, 0), box(200, 600)], 8);
-    expect(guides.filter((g) => g.axis === "x" && g.at === 200)).toEqual([{ axis: "x", at: 200, from: 0, to: 660 }]);
+  test("of nodes on the same line, the guide goes to the nearest", () => {
+    const { guides } = snap(box(202, 300), [box(200, 0), box(200, 420)], 8);
+    expect(guides).toEqual([{ axis: "x", at: 200, from: 360, to: 420 }]);
+  });
+
+  test("a guide for each axis it snapped on", () => {
+    const { guides } = snap(box(202, 3), [box(200, 300), box(500, 0)], 8);
+    expect(guides.map((g) => g.axis).sort()).toEqual(["x", "y"]);
   });
 });
