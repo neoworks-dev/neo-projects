@@ -53,27 +53,21 @@ describe("resized", () => {
     expect(resized(start, "nw", 40, 20, min, false)).toEqual({ x: 140, y: 120, w: 160, h: 80 });
   });
 
-  test("a side only changes its own dimension", () => {
-    expect(resized(start, "w", -30, 99, min, false)).toEqual({ x: 70, y: 100, w: 230, h: 100 });
-    expect(resized(start, "n", 99, -10, min, false)).toEqual({ x: 100, y: 90, w: 200, h: 110 });
-  });
-
   test("it stops at the minimum size, with the opposite side still in place", () => {
     expect(resized(start, "nw", 500, 500, min, false)).toEqual({ x: 220, y: 150, w: 80, h: 50 });
   });
 
-  test("Shift keeps the proportions, the larger change deciding", () => {
+  test("keeping the proportions, the larger change decides", () => {
     expect(resized(start, "se", 100, 10, min, true)).toEqual({ x: 100, y: 100, w: 300, h: 150 });
-    expect(resized(start, "e", 100, 0, min, true)).toEqual({ x: 100, y: 100, w: 300, h: 150 });
+    expect(resized(start, "nw", -10, -100, min, true)).toEqual({ x: -100, y: 0, w: 400, h: 200 });
     expect(resized(start, "se", -500, -500, min, true)).toEqual({ x: 100, y: 100, w: 100, h: 50 });
   });
 });
 
-test("grab zones straddle the border, in screen pixels", () => {
+test("grab zones straddle the corners, in screen pixels", () => {
   const r = { x: 10, y: 20, w: 100, h: 60 };
   expect(grabZone(r, "ne", 2)).toEqual({ x: 212, y: 32, w: 16, h: 16 });
-  expect(grabZone(r, "s", 2)).toEqual({ x: 20, y: 156, w: 200, h: 8 });
-  expect(grabZone(r, "w", 1)).toEqual({ x: 6, y: 20, w: 8, h: 60 });
+  expect(grabZone(r, "sw", 1)).toEqual({ x: 2, y: 72, w: 16, h: 16 });
 });
 
 test("arrow dots sit past the middle of each side and tuck back under it", () => {

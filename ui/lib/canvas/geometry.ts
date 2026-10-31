@@ -125,36 +125,24 @@ export function midpoint(points: Point[]): Point {
   return points[points.length - 1];
 }
 
-/** Where a node is grabbed to resize it: a side or a corner, by compass point. */
-export type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+/** Where a node is grabbed to resize it: a corner, by compass point. */
+export type Handle = "ne" | "nw" | "se" | "sw";
 
-/** Sides first, so the corners are laid over their ends and win where they meet. */
-export const handles: Handle[] = ["n", "e", "s", "w", "nw", "ne", "se", "sw"];
+export const handles: Handle[] = ["nw", "ne", "se", "sw"];
 
-/** How thick a side's grab strip is and how large a corner's square, in screen pixels. */
-const EDGE = 8;
+/** How large a corner's grab square is, in screen pixels. */
 const CORNER = 16;
 
 /**
- * The invisible area that grabs `handle` of `r` drawn at `zoom`, in screen pixels: a strip
- * along a side or a square on a corner, half inside the node and half outside.
+ * The invisible square that grabs `handle` of `r` drawn at `zoom`, in screen pixels, half
+ * inside the node and half outside.
  */
 export function grabZone(r: Rect, handle: Handle, zoom: number): Rect {
-  const left = r.x * zoom;
-  const top = r.y * zoom;
-  const right = (r.x + r.w) * zoom;
-  const bottom = (r.y + r.h) * zoom;
-  if (handle.length === 2) {
-    const x = handle.includes("w") ? left : right;
-    const y = handle.includes("n") ? top : bottom;
-    return { x: x - CORNER / 2, y: y - CORNER / 2, w: CORNER, h: CORNER };
-  }
-  if (handle === "n" || handle === "s") {
-    const y = handle === "n" ? top : bottom;
-    return { x: left, y: y - EDGE / 2, w: right - left, h: EDGE };
-  }
-  const x = handle === "w" ? left : right;
-  return { x: x - EDGE / 2, y: top, w: EDGE, h: bottom - top };
+  let x = (r.x + r.w) * zoom;
+  if (handle.includes("w")) x = r.x * zoom;
+  let y = (r.y + r.h) * zoom;
+  if (handle.includes("n")) y = r.y * zoom;
+  return { x: x - CORNER / 2, y: y - CORNER / 2, w: CORNER, h: CORNER };
 }
 
 export type Side = "n" | "e" | "s" | "w";
@@ -200,25 +188,18 @@ export function near<R extends Rect>(nodes: R[], at: Point, margin: number): R |
 }
 
 /**
- * `start` after dragging its `handle` by `dx`, `dy`: the opposite side or corner stays where it
- * was, and the size stays at least `min`. With `keepAspect` (Shift held) the proportions of
- * `start` are kept, the larger of the two changes deciding the size.
+ * `start` after dragging its `handle` by `dx`, `dy`: the opposite corner stays where it was, and
+ * the size stays at least `min`. With `keepAspect` the proportions of `start` are kept, the
+ * larger of the two changes deciding the size.
  */
 export function resized(start: Rect, handle: Handle, dx: number, dy: number, min: { w: number; h: number }, keepAspect: boolean): Rect {
-  let w = start.w;
-  if (handle.includes("e")) w = start.w + dx;
+  let w = start.w + dx;
   if (handle.includes("w")) w = start.w - dx;
-  let h = start.h;
-  if (handle.includes("s")) h = start.h + dy;
+  let h = start.h + dy;
   if (handle.includes("n")) h = start.h - dy;
 
   if (keepAspect) {
-    const sideways = handle === "e" || handle === "w";
-    const upright = handle === "n" || handle === "s";
-    let scale = Math.max(w / start.w, h / start.h);
-    if (sideways) scale = w / start.w;
-    if (upright) scale = h / start.h;
-    scale = Math.max(scale, min.w / start.w, min.h / start.h);
+    const scale = Math.max(w / start.w, h / start.h, min.w / start.w, min.h / start.h);
     w = start.w * scale;
     h = start.h * scale;
   }

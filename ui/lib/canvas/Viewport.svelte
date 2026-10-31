@@ -47,7 +47,7 @@
   // on the background draws a stroke or erases the strokes it crosses. Drag the background to select the nodes in a box (Shift adds to the selection),
   // drag it with the middle or right button or turn the wheel to pan, Ctrl+wheel to zoom. Press a
   // node to select it, Shift+press to add or take it out. Drag a node to move it with the rest of
-  // the selection, or its sides and corners to resize it. Near a node, a dot slides out past the
+  // the selection, or its corners to resize it. Near a node, a dot slides out past the
   // edge nearest the pointer; drag it onto another node to connect them, from every selected node
   // when it is one of them. Files from other programs and in-app drags (a card from a board) can be
   // dropped anywhere.
@@ -106,6 +106,8 @@
     linkable?: boolean;
     /** The smallest a node can be resized to, or null when it can't be resized. */
     minSize?: (node: N) => { w: number; h: number } | null;
+    /** Whether a node keeps its proportions when resized; the others keep them with Shift. */
+    keepsAspect?: (node: N) => boolean;
     onresized?: (id: string, rect: Rect) => void;
     /** The nodes to select now, after a press, a Shift+press or a box on the background. */
     onselect?: (ids: string[]) => void;
@@ -150,6 +152,7 @@
     movable = () => true,
     linkable = false,
     minSize = () => null,
+    keepsAspect = () => false,
     onresized,
     onselect,
     onbackground,
@@ -574,7 +577,6 @@
   }
 
   function resizeDown(n: N, handle: Handle, e: PointerEvent) {
-    if (e.button !== 0) return;
     const start = { x: n.x, y: n.y, w: n.w, h: n.h };
     resize = { id: n.id, handle, start, from: { x: e.windowX, y: e.windowY }, rect: start };
   }
@@ -582,12 +584,13 @@
   function resizeMove(n: N, e: PointerEvent) {
     const min = minSize(n);
     if (!resize || !min) return;
-    const { windowX, windowY, shift } = e;
+    const { windowX, windowY } = e;
+    const keepAspect = e.shift || keepsAspect(n);
     later(() => {
       if (!resize) return;
       const dx = (windowX - resize.from.x) / zoom;
       const dy = (windowY - resize.from.y) / zoom;
-      resize = { ...resize, rect: resized(resize.start, resize.handle, dx, dy, min, shift) };
+      resize = { ...resize, rect: resized(resize.start, resize.handle, dx, dy, min, keepAspect) };
     });
   }
 
@@ -744,19 +747,18 @@
         {@render node(n, zoom)}
       </View>
       {#if minSize(n) && (nearby?.id === n.id || resize?.id === n.id)}
-        <!-- Invisible strips on the sides and squares on the corners: dragging there resizes. Only
-             the node the pointer is near has them, since their screen size changes with every
-             zoom step. -->
+        <!-- Invisible squares on the corners: dragging there resizes. Only the node the pointer is
+             near has them, since their screen size changes with every zoom step. -->
         {#each handles as handle (handle)}
           {@const zone = grabZone(n, handle, zoom)}
           <View
+            buttons={["left"]}
             style={{
               position: "absolute",
               left: zone.x / zoom,
               top: zone.y / zoom,
               width: zone.w / zoom,
               height: zone.h / zoom,
-              cursor: handle.length === 2 ? "default" : handle === "e" || handle === "w" ? "col-resize" : "row-resize",
             }}
             ondown={(e) => resizeDown(n, handle, e)}
             onmove={(e) => resizeMove(n, e)}
