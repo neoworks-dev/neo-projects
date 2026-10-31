@@ -138,13 +138,14 @@
   }
 
   /**
-   * How small a node can be resized, so its title stays readable: sticky notes, notes and issue
-   * cards resize, the rest keep their size.
+   * How small a node can be resized, so its title stays readable: sticky notes, notes, issue
+   * cards and web links resize, the rest keep their size.
    */
   function minSize(n: Placed): { w: number; h: number } | null {
     if (n.raw.type === "text") return { w: 120, h: 80 };
     if (n.raw.item?.kind === "note") return { w: 160, h: 90 };
     if (n.raw.item?.kind === "issue") return { w: 200, h: 96 };
+    if (n.raw.item?.kind === "link") return { w: 200, h: 72 };
     return null;
   }
 

@@ -7,7 +7,8 @@ use crate::Result;
 
 const SCHEMA: &str = include_str!("schema.sql");
 const SCHEMA_V2: &str = include_str!("schema_v2.sql");
-const VERSION: i64 = 2;
+const SCHEMA_V3: &str = include_str!("schema_v3.sql");
+const VERSION: i64 = 3;
 
 /// `cache.db`. One per workspace, owned by the window's Rust host.
 pub struct Cache {
@@ -31,13 +32,16 @@ impl Cache {
     fn init(conn: Connection) -> Result<Cache> {
         conn.pragma_update(None, "foreign_keys", true)?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version == 0 || version == 1 {
-            // A version 1 database keeps its data; only the index tables are added.
+        if (0..VERSION).contains(&version) {
+            // An older database keeps its data; only the tables of later versions are added.
             let tx = conn.unchecked_transaction()?;
             if version == 0 {
                 tx.execute_batch(SCHEMA)?;
             }
-            tx.execute_batch(SCHEMA_V2)?;
+            if version <= 1 {
+                tx.execute_batch(SCHEMA_V2)?;
+            }
+            tx.execute_batch(SCHEMA_V3)?;
             tx.commit()?;
             conn.pragma_update(None, "user_version", VERSION)?;
         } else if version != VERSION {

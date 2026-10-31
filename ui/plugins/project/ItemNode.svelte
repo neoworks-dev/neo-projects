@@ -67,9 +67,29 @@
     </View>
   </View>
 {:else if item.kind === "link"}
-  <View style={{ ...frame, padding: s(12), gap: s(4), justify: "center" }}>
-    <Text style={{ fontSize: s(10), color: c.accent, uppercase: true }}>{item.host}</Text>
-    <Text style={{ fontSize: s(13), maxLines: 2 }}>{item.title}</Text>
+  <View style={frame}>
+    {#if item.preview?.image}
+      <!-- The box clips: on a card too short for it, an image alone would draw over the text. -->
+      <View style={{ flex: 1, minHeight: 0, overflow: "hidden", background: c.bg }}>
+        <Image src={item.preview.image} fit="cover" style={{ flex: 1 }} />
+      </View>
+    {/if}
+    <View style={{ padding: s(12), gap: s(4), justify: "center", flex: item.preview?.image ? undefined : 1 }}>
+      <View style={{ direction: "row", align: "center", gap: s(6) }}>
+        {#if item.preview?.favicon}
+          <Image src={item.preview.favicon} fit="contain" style={{ width: s(12), height: s(12) }} />
+        {/if}
+        <Text style={{ fontSize: s(10), color: c.accent, uppercase: true, truncate: true }}>
+          {item.preview?.site ?? item.host}
+        </Text>
+      </View>
+      <Text style={{ fontSize: s(13), maxLines: 2 }}>{item.preview?.title ?? item.title}</Text>
+      {#if item.preview?.description && zoom >= 0.45}
+        <Text style={{ fontSize: s(11.5), color: c.muted, lineHeight: s(16), maxLines: 2 }}>
+          {item.preview.description}
+        </Text>
+      {/if}
+    </View>
   </View>
 {:else if item.kind === "localboard"}
   <LocalBoard {item} {zoom} {selected} />
