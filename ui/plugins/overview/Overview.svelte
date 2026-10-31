@@ -3,7 +3,7 @@
   // by dragging; press one to open its project.
   import { Button, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { CanvasNode, Overview, Project } from "../../lib/api.ts";
-  import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
+  import Viewport, { type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { app } from "../../lib/state.svelte.ts";
   import { c, primary, primaryHover } from "../../lib/theme.ts";
   import { dialogs } from "./dialogs.svelte.ts";
@@ -11,7 +11,7 @@
 
   let overview = $state<Overview | null>(null);
   let view = $state<ViewState>({ x: -40, y: -40, zoom: 1 });
-  let selected = $state<string | null>(null);
+  let selected = $state<string[]>([]);
 
   $effect(() => {
     void app.version;
@@ -44,9 +44,14 @@
     })),
   );
 
-  function moved(id: string, x: number, y: number) {
+  function moved(moves: Move[]) {
     if (!overview) return;
-    const next: CanvasNode[] = overview.nodes.map((n) => (n.id === id ? { ...n, x, y } : n));
+    const at = new Map(moves.map((m) => [m.id, m]));
+    const next: CanvasNode[] = overview.nodes.map((n) => {
+      const move = at.get(n.id);
+      if (!move) return n;
+      return { ...n, x: move.x, y: move.y };
+    });
     overview = { ...overview, nodes: next };
     void app.run(() => app.api.saveCanvas(overview!.path, next));
   }
@@ -75,13 +80,13 @@
       {arrows}
       bind:view
       {selected}
-      onselect={(id) => (selected = id)}
+      onselect={(ids) => (selected = ids)}
       onopen={open}
       onpress={open}
       onmoved={moved}
     >
       {#snippet node(n, zoom)}
-        <ProjectCard project={n.project} {zoom} selected={selected === n.id} />
+        <ProjectCard project={n.project} {zoom} selected={selected.includes(n.id)} />
       {/snippet}
     </Viewport>
   {/if}

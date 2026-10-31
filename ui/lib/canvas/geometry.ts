@@ -49,6 +49,16 @@ export function contains(r: Rect, p: Point): boolean {
   return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 }
 
+/** The rect with corners `a` and `b`, whichever way round they are. */
+export function spanned(a: Point, b: Point): Rect {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+}
+
+/** Whether `a` and `b` share any point, edges included. */
+export function touches(a: Rect, b: Rect): boolean {
+  return a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
+}
+
 /** The empty space between two rects, along the axis they are furthest apart on; 0 when they touch. */
 export function gapBetween(a: Rect, b: Rect): number {
   const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w), 0);

@@ -1,7 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { arrowPath, contain, dotPoint, gapBetween, grabZone, midpoint, near, nearestSide, resized } from "./geometry.ts";
+import { arrowPath, contain, dotPoint, gapBetween, grabZone, midpoint, near, nearestSide, resized, spanned, touches } from "./geometry.ts";
 
 const box = (x: number, y: number) => ({ x, y, w: 100, h: 60 });
+
+describe("selection box", () => {
+  test("spans its two corners whichever way it was dragged", () => {
+    expect(spanned({ x: 300, y: 50 }, { x: 100, y: 250 })).toEqual({ x: 100, y: 50, w: 200, h: 200 });
+  });
+
+  test("takes every node it touches", () => {
+    const area = spanned({ x: 0, y: 0 }, { x: 250, y: 100 });
+    expect(touches(box(10, 10), area)).toBe(true);
+    expect(touches(box(200, 10), area)).toBe(true);
+    expect(touches(box(300, 10), area)).toBe(false);
+  });
+});
 
 describe("arrowPath", () => {
   test("far apart side by side: a curve from the right side to the left side", () => {
