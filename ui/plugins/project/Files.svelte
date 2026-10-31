@@ -15,13 +15,14 @@
   // The project's files, as Android Studio's Project pane: its folder and the folders it links,
   // as a tree that loads each folder when it is opened. Drag a file onto the canvas to place a
   // link to it there; double-press it to open it.
-  import { Button, Draggable, Icon, Text, Tree, View } from "@neoworks/svelte-gpui/ui";
+  import { Button, Draggable, Icon, Image, Text, Tree, View } from "@neoworks/svelte-gpui/ui";
   import { Tooltip } from "@neoworks/svelte-gpui-ui";
   import type { DirEntry, Project } from "../../lib/api.ts";
+  import { fileIcon } from "../../lib/fileIcons.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c, eyebrow, radii, shadow } from "../../lib/theme.ts";
   import { icons } from "../../lib/icons.ts";
-  const { file, fileAudio, fileCode, fileImage, fileMarkdown: fileMd, filePdf, fileVideo, fileArchive: fileZip, folderOpen, folderClosed: folder, close } = icons;
+  const { close } = icons;
 
   let { project, onclose }: { project: Project; onclose: () => void } = $props();
 
@@ -47,40 +48,6 @@
     for (const path of expanded) void load({ name: "", path, dir: true });
   });
 
-  const byExtension: Record<string, string> = {
-    md: fileMd,
-    pdf: filePdf,
-    png: fileImage,
-    jpg: fileImage,
-    jpeg: fileImage,
-    gif: fileImage,
-    webp: fileImage,
-    svg: fileImage,
-    mp4: fileVideo,
-    mov: fileVideo,
-    webm: fileVideo,
-    mkv: fileVideo,
-    mp3: fileAudio,
-    wav: fileAudio,
-    flac: fileAudio,
-    zip: fileZip,
-    gz: fileZip,
-    tar: fileZip,
-    ts: fileCode,
-    js: fileCode,
-    rs: fileCode,
-    svelte: fileCode,
-    json: fileCode,
-    toml: fileCode,
-    py: fileCode,
-    go: fileCode,
-    kt: fileCode,
-  };
-
-  function iconOf(entry: DirEntry, open: boolean): string {
-    if (entry.dir) return open ? folderOpen : folder;
-    return byExtension[entry.name.split(".").pop()?.toLowerCase() ?? ""] ?? file;
-  }
 
   /** A note of the workspace opens in its sheet; anything else in its own program. */
   function activate(entry: DirEntry) {
@@ -136,13 +103,13 @@
     {#snippet row(entry, info)}
       {#if entry.dir}
         <View style={{ flex: 1, minWidth: 0, direction: "row", align: "center", gap: 7 }}>
-          <Icon svg={iconOf(entry, info.expanded)} size={15} color={info.depth === 0 ? c.accentText : c.muted} />
+          <Image src={fileIcon(entry.name, true, info.expanded)} style={{ size: 16, shrink: 0 }} />
           <Text style={{ flex: 1, fontSize: 13, color: c.text, truncate: true, fontWeight: info.depth === 0 ? "medium" : "normal" }}>{entry.name}</Text>
         </View>
       {:else}
         <Draggable data={{ kind: "file", path: entry.path, name: entry.name }} style={{ flex: 1, minWidth: 0 }}>
           <View style={{ direction: "row", align: "center", gap: 7, height: 26 }}>
-            <Icon svg={iconOf(entry, false)} size={15} color={c.faint} />
+            <Image src={fileIcon(entry.name)} style={{ size: 16, shrink: 0 }} />
             <Text style={{ flex: 1, fontSize: 13, color: c.muted, truncate: true }}>{entry.name}</Text>
           </View>
         </Draggable>

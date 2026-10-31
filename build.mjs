@@ -1,6 +1,6 @@
 // Bundles the UI for the svelte-gpui host. svelte-gpui and extension-system are checked out next
 // to this repo. `bun build.mjs --watch` rebuilds on every save (run the binary with --watch too).
-import { existsSync, statSync } from "node:fs";
+import { cpSync, existsSync, rmSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "../svelte-gpui/node_modules/esbuild/lib/main.js";
 import { build } from "../svelte-gpui/build.mjs";
@@ -20,6 +20,15 @@ if (!existsSync(mathjax) || statSync(here("./bun.lock")).mtimeMs > statSync(math
     minify: true,
     logLevel: "warning",
   });
+}
+
+// The Material Icon Theme's SVGs, which the window draws by path relative to the bundle, with its
+// licence. Copied again when the lockfile changes, as MathJax is.
+const fileIcons = here("./dist/file-icons");
+if (!existsSync(fileIcons) || statSync(here("./bun.lock")).mtimeMs > statSync(fileIcons).mtimeMs) {
+  rmSync(fileIcons, { recursive: true, force: true });
+  cpSync(here("./node_modules/material-icon-theme/icons"), fileIcons, { recursive: true });
+  cpSync(here("./node_modules/material-icon-theme/LICENSE"), `${fileIcons}/LICENSE`);
 }
 
 await build({
