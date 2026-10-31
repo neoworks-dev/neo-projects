@@ -16,6 +16,7 @@ pub mod github;
 pub mod highlight;
 pub mod media;
 pub mod previews;
+pub mod sheet;
 pub mod views;
 pub mod workspace;
 

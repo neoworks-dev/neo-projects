@@ -1,11 +1,12 @@
 <script lang="ts">
-  // Everything on a project canvas that isn't the board: a note (a card), an image, a file (a PDF
-  // or video with its poster), a web link, an issue placed off the board, a local board, a folder.
+  // Everything on a project canvas that isn't the board: a note (a card), a text or code file (a
+  // sheet of its first lines), an image, a file (a PDF or video with its poster), a web link, an issue placed off the board, a local board, a folder.
   // Lengths are in world units and the canvas layer's zoom scales them; `zoom` picks the level
   // of detail.
   import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
+  import Code from "../../lib/markdown/Code.svelte";
   import { plainText } from "../../lib/markdown/plain.ts";
   import { c, ring } from "../../lib/theme.ts";
   import FolderNode from "./FolderNode.svelte";
@@ -86,6 +87,19 @@
       {:else}
         <Text style={{ fontSize: 12.5, color: c.faint, lineHeight: 18 }}>Empty. Double-click to write.</Text>
       {/if}
+    {/if}
+  </View>
+{:else if item.kind === "sheet"}
+  <!-- A page of the file: its first lines, as many as the card has room for. -->
+  <View style={{ ...frame, padding: 14, gap: 10 }} hover={{ borderColor: selected ? c.accent : c.borderStrong }}>
+    <View style={{ direction: "row", align: "center", gap: 6, shrink: 0 }}>
+      <Image src={fileIcon(item.title)} style={{ size: zoom < 0.45 ? 30 : 14, shrink: 0 }} />
+      <Text style={{ fontSize: zoom < 0.45 ? 26 : 11, color: zoom < 0.45 ? c.text : c.faint, truncate: true }}>{item.title}</Text>
+    </View>
+    {#if zoom >= 0.45}
+      <View style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <Code code={item.head} lang={item.lang} size={13} />
+      </View>
     {/if}
   </View>
 {:else if item.kind === "image"}

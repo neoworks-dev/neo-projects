@@ -591,8 +591,8 @@
   }
 
   /**
-   * How small a node can be resized, so its title stays readable: sticky notes, notes, issue
-   * cards, web links, folders and images resize, the rest keep their size.
+   * How small a node can be resized, so its title stays readable: sticky notes, notes, text
+   * files, issue cards, web links, folders and images resize, the rest keep their size.
    */
   function minSize(n: Placed): { w: number; h: number } | null {
     // An unfolded folder's nodes are laid out in rows; their size is the folder canvas's.
@@ -600,6 +600,7 @@
     if (n.raw.type === "text") return { w: 120, h: 80 };
     if (n.raw.item?.kind === "image") return { w: 48, h: 48 };
     if (n.raw.item?.kind === "note") return { w: 160, h: 90 };
+    if (n.raw.item?.kind === "sheet") return { w: 200, h: 120 };
     if (n.raw.item?.kind === "issue") return { w: 200, h: 96 };
     if (n.raw.item?.kind === "link") return { w: 200, h: 72 };
     if (n.raw.item?.kind === "folder") return { w: 180, h: 140 };
@@ -690,7 +691,7 @@
     if (!item) return;
     if (item.kind === "issue") app.select({ kind: "issue", node: item.card.node });
     else if (item.kind === "note") app.select({ kind: "note", path: item.path });
-    else if (item.kind === "image" || item.kind === "file") void app.run(() => app.api.open(item.path));
+    else if (item.kind === "image" || item.kind === "file" || item.kind === "sheet") void app.run(() => app.api.open(item.path));
     else if (item.kind === "link") void app.run(() => app.api.open(item.uri));
     else if (item.kind === "folder") app.open({ view: "project", project: folder, inside: item.path });
   }
