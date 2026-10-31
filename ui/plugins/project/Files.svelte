@@ -102,12 +102,12 @@
   >
     {#snippet row(entry, info)}
       {#if entry.dir}
-        <View style={{ flex: 1, minWidth: 0, direction: "row", align: "center", gap: 7 }}>
+        <View style={{ minWidth: 0, direction: "row", align: "center", gap: 7 }}>
           <Image src={fileIcon(entry.name, true, info.expanded)} style={{ size: 16, shrink: 0 }} />
           <Text style={{ flex: 1, fontSize: 13, color: c.text, truncate: true, fontWeight: info.depth === 0 ? "medium" : "normal" }}>{entry.name}</Text>
         </View>
       {:else}
-        <Draggable data={{ kind: "file", path: entry.path, name: entry.name }} style={{ flex: 1, minWidth: 0 }}>
+        <Draggable data={{ kind: "file", path: entry.path, name: entry.name }} style={{ minWidth: 0 }}>
           <View style={{ direction: "row", align: "center", gap: 7, height: 26 }}>
             <Image src={fileIcon(entry.name)} style={{ size: 16, shrink: 0 }} />
             <Text style={{ flex: 1, fontSize: 13, color: c.muted, truncate: true }}>{entry.name}</Text>
