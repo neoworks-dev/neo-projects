@@ -72,7 +72,7 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         let path = workspace::folder_canvas_path(&dir);
         open.wrote(&path);
         workspace::write_canvas(&path, &workspace::Canvas::default()).map_err(fail)?;
-        Ok(json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 220, "height": 64}))
+        Ok(json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 220, "height": 170}))
     });
     // The node `node` of the canvas `from` moved onto the canvas `into` (both workspace-relative):
     // into a folder, or out of one. `at` is where it goes, `[x, y]`, or where there is room.

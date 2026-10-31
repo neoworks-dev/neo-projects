@@ -101,11 +101,19 @@ export type Item =
   | { kind: "board"; uri: string }
   | { kind: "localboard"; uri: string; path: string; title: string; groupBy: string; columns: LocalColumn[] }
   /** A directory of the project with a canvas inside; `path` is the directory's, `count` its canvas's nodes. */
-  | { kind: "folder"; uri: string | null; path: string; canvas: string; title: string; count: number }
+  | { kind: "folder"; uri: string | null; path: string; canvas: string; title: string; count: number; peek: Peek[] }
   | { kind: "project"; uri: string; project: Project }
   | { kind: "text"; uri: null; text: string | null }
   | { kind: "group"; uri: null; title: string | null }
   | { kind: "missing"; uri: string | null; title: string };
+
+/** One of the first things in a folder, as it peeks out of it: `image` is an absolute path. */
+export interface Peek {
+  kind: Item["kind"];
+  title: string | null;
+  image: string | null;
+  mime: string | null;
+}
 
 /** What a web page says about itself, fetched by the host. Images are absolute paths. */
 export interface LinkPreview {

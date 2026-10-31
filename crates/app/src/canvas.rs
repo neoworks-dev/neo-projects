@@ -311,7 +311,7 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
                 return local_board(ws, &path);
             }
             if let Some(dir) = folder_of(&path) {
-                return Ok(folder_item(ws, uri.map(|u| u.to_string()), dir, &path));
+                return folder_item(ws, cache, uri.map(|u| u.to_string()), dir, &path);
             }
             if let Some(card) = local_issue_card(ws, &path) {
                 return Ok(json!({"kind": "issue", "uri": uri.map(|u| u.to_string()), "card": card}));
@@ -347,14 +347,42 @@ fn aspect(path: &Path) -> Option<f64> {
     Some(size.width as f64 / size.height as f64)
 }
 
-/// A folder by its canvas: its directory, workspace-relative, and how many nodes it holds.
-fn folder_item(ws: &Workspace, uri: Option<String>, dir: &Path, canvas_path: &Path) -> Value {
+/// How many of a folder's nodes peek out of it on the canvas.
+const PEEK: usize = 3;
+
+/// A folder by its canvas: its directory, workspace-relative, how many nodes it holds, and the
+/// first few of them, to peek out of it.
+fn folder_item(ws: &Workspace, cache: &Cache, uri: Option<String>, dir: &Path, canvas_path: &Path) -> Result<Value> {
     if !dir.is_dir() {
-        return json!({"kind": "missing", "uri": uri, "title": "Folder not found"});
+        return Ok(json!({"kind": "missing", "uri": uri, "title": "Folder not found"}));
     }
-    let count = load(canvas_path).map(|c| c.nodes.len()).unwrap_or(0);
+    let nodes = load(canvas_path).map(|c| c.nodes).unwrap_or_default();
+    let peek = nodes.iter().take(PEEK).map(|n| peek(ws, cache, n)).collect::<Result<Vec<_>>>()?;
     let name = dir.file_name().unwrap_or_default().to_string_lossy();
-    json!({"kind": "folder", "uri": uri, "path": rel(ws, dir), "canvas": rel(ws, canvas_path), "title": name, "count": count})
+    Ok(json!({"kind": "folder", "uri": uri, "path": rel(ws, dir), "canvas": rel(ws, canvas_path), "title": name,
+              "count": nodes.len(), "peek": peek}))
+}
+
+/// What a folder shows of a node inside it: its kind, its name, and a picture when it has one. A
+/// folder inside shows only its name, so folders in folders aren't all read.
+fn peek(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
+    if let Some(dir) = node.file.as_ref().map(|f| ws.root().join(f)).as_deref().and_then(folder_of) {
+        return Ok(json!({"kind": "folder", "title": dir.file_name().unwrap_or_default().to_string_lossy()}));
+    }
+    let it = item(ws, cache, node)?;
+    let title = match it["kind"].as_str() {
+        Some("issue") => it["card"]["title"].clone(),
+        Some("text") => it["text"].clone(),
+        Some("link") => it["preview"]["title"].as_str().map_or(it["title"].clone(), |t| json!(t)),
+        _ => it["title"].clone(),
+    };
+    let image = match it["kind"].as_str() {
+        Some("image") => it["path"].clone(),
+        Some("file") => it["media"]["poster"].clone(),
+        Some("link") => it["preview"]["image"].clone(),
+        _ => Value::Null,
+    };
+    Ok(json!({"kind": it["kind"], "title": title, "image": image, "mime": it["mime"]}))
 }
 
 /// The card of the local issue a file is, if it is one.

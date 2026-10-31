@@ -276,7 +276,7 @@
 
   /**
    * How small a node can be resized, so its title stays readable: sticky notes, notes, issue
-   * cards and web links resize, the rest keep their size.
+   * cards, web links and folders resize, the rest keep their size.
    */
   function minSize(n: Placed): { w: number; h: number } | null {
     // An unfolded folder's nodes are laid out in rows; their size is the folder canvas's.
@@ -285,6 +285,7 @@
     if (n.raw.item?.kind === "note") return { w: 160, h: 90 };
     if (n.raw.item?.kind === "issue") return { w: 200, h: 96 };
     if (n.raw.item?.kind === "link") return { w: 200, h: 72 };
+    if (n.raw.item?.kind === "folder") return { w: 180, h: 140 };
     return null;
   }
 
@@ -596,14 +597,9 @@
         out={[fade, { duration: 120 }]}
         style={{ position: "absolute", top: 14, left: 0, right: 0, align: "center" }}
       >
-        <View
-          style={{ padding: 6, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
-          onpress={() => {}}
-        >
-          {#key folderItem.path}
-            <FolderName name={folderItem.title} onrename={(name) => void renameFolder(folderItem.path, name)} />
-          {/key}
-        </View>
+        {#key folderItem.path}
+          <FolderName name={folderItem.title} onrename={(name) => void renameFolder(folderItem.path, name)} />
+        {/key}
       </Presence>
     {/if}
 

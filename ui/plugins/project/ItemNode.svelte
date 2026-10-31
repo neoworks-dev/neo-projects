@@ -6,7 +6,8 @@
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
   import { plainText } from "../../lib/markdown/plain.ts";
-  import { c, ring, stateTransition } from "../../lib/theme.ts";
+  import { c, ring } from "../../lib/theme.ts";
+  import FolderNode from "./FolderNode.svelte";
   import LocalBoard from "./LocalBoard.svelte";
   import { icons } from "../../lib/icons.ts";
   import { duration, pages } from "../../lib/media.ts";
@@ -151,27 +152,7 @@
     </View>
   </View>
 {:else if item.kind === "folder"}
-  <View
-    style={{
-      ...frame,
-      direction: "row",
-      align: "center",
-      gap: s(10),
-      paddingX: s(14),
-      background: target ? c.accentSoft : c.surface,
-      borderColor: selected || target ? c.accent : open ? c.borderStrong : c.border,
-      transition: stateTransition,
-    }}
-    hover={{ borderColor: selected || target ? c.accent : c.borderStrong }}
-  >
-    <Image src={fileIcon(item.title, true, open)} style={{ size: s(26), shrink: 0 }} />
-    <View style={{ flex: 1, minWidth: 0, gap: s(2) }}>
-      <Text style={{ fontSize: s(13.5), truncate: true }}>{item.title}</Text>
-      {#if zoom >= 0.45}
-        <Text style={{ fontSize: s(11), color: c.faint }}>{item.count === 1 ? "1 item" : `${item.count} items`}</Text>
-      {/if}
-    </View>
-  </View>
+  <FolderNode {item} {zoom} {selected} {open} {target} />
 {:else if item.kind === "localboard"}
   <LocalBoard {item} {zoom} {selected} />
 {:else if item.kind === "text"}
