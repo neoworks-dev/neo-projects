@@ -41,18 +41,25 @@ function between(a: Rect, b: Rect, axis: "x" | "y"): [number, number] {
   return [Math.min(inner, outer), Math.max(inner, outer)];
 }
 
+/** How much empty space lies between `a` and `b` across `axis`; 0 when they overlap. */
+function gapAcross(a: Rect, b: Rect, axis: "x" | "y"): number {
+  const [a0, a1] = across(a, axis);
+  const [b0, b1] = across(b, axis);
+  return Math.max(0, b0 - a1, a0 - b1);
+}
+
 /**
  * The line of another node that one of `moving`'s lines is nearest to along `axis`, within
- * `reach`. Of lines as near as each other, the node closest across the axis wins, so the guide
- * between them stays short.
+ * `reach`, of the nodes no further than `range` from it across the axis. Of lines as near as
+ * each other, the node closest across the axis wins, so the guide between them stays short.
  */
-function nearestMatch(moving: Rect, others: Rect[], axis: "x" | "y", reach: number): Match | null {
+function nearestMatch(moving: Rect, others: Rect[], axis: "x" | "y", reach: number, range: number): Match | null {
   let best: Match | null = null;
   let bestDistance = reach;
   let bestGap = Infinity;
   for (const other of others) {
-    const [from, to] = between(moving, other, axis);
-    const gap = to - from;
+    const gap = gapAcross(moving, other, axis);
+    if (gap > range) continue;
     for (const at of lines(other, axis)) {
       for (const own of lines(moving, axis)) {
         const distance = Math.abs(at - own);
@@ -76,11 +83,12 @@ function guideFor(placed: Rect, match: Match, axis: "x" | "y"): Guide {
 
 /**
  * Where `moving` should go so an edge or its centre lines up with one of `others` within
- * `reach`, each axis on its own, and a guide for each axis it snapped on.
+ * `reach`, each axis on its own, and a guide for each axis it snapped on. Only nodes within
+ * `range` of it count: lining up with something far off isn't what a drag is after.
  */
-export function snap(moving: Rect, others: Rect[], reach: number): { dx: number; dy: number; guides: Guide[] } {
-  const alongX = nearestMatch(moving, others, "x", reach);
-  const alongY = nearestMatch(moving, others, "y", reach);
+export function snap(moving: Rect, others: Rect[], reach: number, range = Infinity): { dx: number; dy: number; guides: Guide[] } {
+  const alongX = nearestMatch(moving, others, "x", reach, range);
+  const alongY = nearestMatch(moving, others, "y", reach, range);
   const dx = alongX?.shift ?? 0;
   const dy = alongY?.shift ?? 0;
   const placed = { ...moving, x: moving.x + dx, y: moving.y + dy };

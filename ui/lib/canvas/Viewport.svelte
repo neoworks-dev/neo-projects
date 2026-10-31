@@ -189,6 +189,8 @@
   let guides = $state<Guide[]>([]);
   /** How close an edge or centre comes to another's, in screen pixels, before it snaps to it. */
   const SNAP = 6;
+  /** How far away a node can be, in screen pixels, and still be one to line up with. */
+  const SNAP_RANGE = 400;
   /**
    * A selection box being dragged on the background, from `from` to `to` (viewport coordinates),
    * and what was selected before it, which Shift keeps.
@@ -529,7 +531,7 @@
       if (moved && !alt) {
         const starts = drag.starts;
         const others = visible.filter((m) => !starts.has(m.id));
-        const aligned = snap({ ...drag.box, x: drag.box.x + dx, y: drag.box.y + dy }, others, SNAP / zoom);
+        const aligned = snap({ ...drag.box, x: drag.box.x + dx, y: drag.box.y + dy }, others, SNAP / zoom, SNAP_RANGE / zoom);
         dx += aligned.dx;
         dy += aligned.dy;
         guides = aligned.guides;

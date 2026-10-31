@@ -35,6 +35,12 @@ describe("snap", () => {
     expect(guides).toEqual([{ axis: "x", at: 200, from: 360, to: 420 }]);
   });
 
+  test("nodes further away than the range are ignored", () => {
+    // The gap across is 240 (from 60 to 300).
+    expect(snap(box(202, 300), [box(200, 0)], 8, 200)).toEqual({ dx: 0, dy: 0, guides: [] });
+    expect(snap(box(202, 300), [box(200, 0)], 8, 300).dx).toBe(-2);
+  });
+
   test("a guide for each axis it snapped on", () => {
     const { guides } = snap(box(202, 3), [box(200, 300), box(500, 0)], 8);
     expect(guides.map((g) => g.axis).sort()).toEqual(["x", "y"]);
