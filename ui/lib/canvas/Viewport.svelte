@@ -64,7 +64,7 @@
     nearestSide,
     resized,
     spanned,
-    within,
+    touches,
     type Handle,
     type Point,
     type Rect,
@@ -295,6 +295,7 @@
     onselectarrow?.(null);
     if (e.button === 0) {
       lasso = { from: local(e), to: local(e), kept: e.shift ? selected : [] };
+      nearby = null;
       if (!e.shift) onselect?.([]);
       return;
     }
@@ -302,19 +303,18 @@
     panning = true;
   }
 
-  /** Selects what was kept and every node wholly inside the box. */
+  /** Selects what was kept and every node the box touches. */
   function lassoSelect() {
     if (!lassoBox) return;
     const corner = toWorld(lassoBox);
     const area = { ...corner, w: lassoBox.w / zoom, h: lassoBox.h / zoom };
     const kept = lasso?.kept ?? [];
-    const inside = shown.filter((n) => within(n, area) && !kept.includes(n.id)).map((n) => n.id);
+    const inside = shown.filter((n) => touches(n, area) && !kept.includes(n.id)).map((n) => n.id);
     onselect?.([...kept, ...inside]);
   }
 
   function backgroundMove(e: PointerEvent) {
     pointer = local(e);
-    track(e);
     if (lasso) {
       const to = local(e);
       later(() => {
@@ -324,6 +324,7 @@
       });
       return;
     }
+    track(e);
     const start = pan;
     if (!start) return;
     const { windowX, windowY } = e;

@@ -54,9 +54,9 @@ export function spanned(a: Point, b: Point): Rect {
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
 }
 
-/** Whether `inner` lies wholly inside `outer`. */
-export function within(inner: Rect, outer: Rect): boolean {
-  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
+/** Whether `a` and `b` share any point, edges included. */
+export function touches(a: Rect, b: Rect): boolean {
+  return a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
 }
 
 /** The empty space between two rects, along the axis they are furthest apart on; 0 when they touch. */
