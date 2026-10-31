@@ -115,20 +115,46 @@ export function midpoint(points: Point[]): Point {
   return points[points.length - 1];
 }
 
-/** A resize handle of a selected node: a side or a corner, by compass point. */
+/** Where a node is grabbed to resize it: a side or a corner, by compass point. */
 export type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
-export const handles: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+/** Sides first, so the corners are laid over their ends and win where they meet. */
+export const handles: Handle[] = ["n", "e", "s", "w", "nw", "ne", "se", "sw"];
 
-/** Where `handle` sits on `r`, as a point on its border. */
-export function handlePoint(r: Rect, handle: Handle): Point {
-  let x = r.x + r.w / 2;
-  if (handle.includes("w")) x = r.x;
-  if (handle.includes("e")) x = r.x + r.w;
-  let y = r.y + r.h / 2;
-  if (handle.includes("n")) y = r.y;
-  if (handle.includes("s")) y = r.y + r.h;
-  return { x, y };
+/** How thick a side's grab strip is and how large a corner's square, in screen pixels. */
+const EDGE = 8;
+const CORNER = 16;
+
+/**
+ * The invisible area that grabs `handle` of `r` drawn at `zoom`, in screen pixels: a strip
+ * along a side or a square on a corner, half inside the node and half outside.
+ */
+export function grabZone(r: Rect, handle: Handle, zoom: number): Rect {
+  const left = r.x * zoom;
+  const top = r.y * zoom;
+  const right = (r.x + r.w) * zoom;
+  const bottom = (r.y + r.h) * zoom;
+  if (handle.length === 2) {
+    const x = handle.includes("w") ? left : right;
+    const y = handle.includes("n") ? top : bottom;
+    return { x: x - CORNER / 2, y: y - CORNER / 2, w: CORNER, h: CORNER };
+  }
+  if (handle === "n" || handle === "s") {
+    const y = handle === "n" ? top : bottom;
+    return { x: left, y: y - EDGE / 2, w: right - left, h: EDGE };
+  }
+  const x = handle === "w" ? left : right;
+  return { x: x - EDGE / 2, y: top, w: EDGE, h: bottom - top };
+}
+
+/** The topmost of `nodes` (the last drawn) within `margin` of `at`, or null. */
+export function near<R extends Rect>(nodes: R[], at: Point, margin: number): R | null {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const r = nodes[i];
+    const grown = { x: r.x - margin, y: r.y - margin, w: r.w + 2 * margin, h: r.h + 2 * margin };
+    if (contains(grown, at)) return r;
+  }
+  return null;
 }
 
 /**
