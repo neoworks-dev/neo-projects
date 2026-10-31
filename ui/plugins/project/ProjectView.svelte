@@ -15,6 +15,7 @@
   import { c, eyebrow, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
   import Files, { isFileDrag } from "./Files.svelte";
+  import FolderName from "./FolderName.svelte";
   import ItemNode from "./ItemNode.svelte";
   import StickyNote, { stickyColors } from "./StickyNote.svelte";
   import { projectKeys } from "./keys.svelte.ts";
@@ -133,15 +134,35 @@
     if (!data) return;
     const node = data.nodes.find((n) => n.id === id);
     if (!node) return;
+    const centre = { x: x + node.width / 2, y: y + node.height / 2 };
     // An issue dropped back on the board leaves the canvas and returns to its column.
-    if (node.item?.kind === "issue" && boardNode) {
-      const centre = { x: x + node.width / 2, y: y + node.height / 2 };
-      if (contains(boardNode, centre)) {
-        save(data.nodes.filter((n) => n.id !== id));
-        return;
-      }
+    if (node.item?.kind === "issue" && boardNode && contains(boardNode, centre)) {
+      save(data.nodes.filter((n) => n.id !== id));
+      return;
+    }
+    const into = nodes.find((n) => n.id !== id && n.raw.item?.kind === "folder" && contains(n, centre))?.raw.item;
+    if (into?.kind === "folder") {
+      void putInFolder(id, into.path);
+      return;
     }
     save(data.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)));
+  }
+
+  /** Moves a node into a folder. The host answers with a change, which reloads the canvas. */
+  async function putInFolder(id: string, dir: string) {
+    if (!data) return;
+    const path = data.path;
+    data = { ...data, nodes: data.nodes.filter((n) => n.id !== id) };
+    selected = null;
+    await app.run(() => app.api.putInFolder(path, id, dir));
+    app.version++;
+  }
+
+  async function renameFolder(dir: string, name: string) {
+    const next = name.trim();
+    if (!next || next === dir.split("/").pop()) return;
+    await app.run(() => app.api.renameFolder(dir, next));
+    app.version++;
   }
 
   /**
@@ -425,6 +446,24 @@
               onpress={() => setColor(sticky.id, color)}
             />
           {/each}
+        </View>
+      </Presence>
+    {/if}
+
+    {#if selectedNode?.item?.kind === "folder"}
+      {@const folderItem = selectedNode.item}
+      <Presence
+        in={[fly, { y: 10, duration: 180 }]}
+        out={[fade, { duration: 120 }]}
+        style={{ position: "absolute", top: 14, left: 0, right: 0, align: "center" }}
+      >
+        <View
+          style={{ padding: 6, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
+          onpress={() => {}}
+        >
+          {#key folderItem.path}
+            <FolderName name={folderItem.title} onrename={(name) => void renameFolder(folderItem.path, name)} />
+          {/key}
         </View>
       </Presence>
     {/if}

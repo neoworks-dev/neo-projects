@@ -259,6 +259,10 @@ export const api = {
   /** A project's canvas, or with `inside` (a folder's directory) that folder's. */
   projectView: (project: string, inside?: string) => invoke<ProjectView>("project_view", { project, inside }),
   createFolder: (dir: string, name: string) => invoke<CanvasNode>("folder_create", { dir, name }),
+  /** Moves a node of `canvas` into the folder `dir`, and its file with it when it sits beside the canvas. */
+  putInFolder: (canvas: string, node: string, dir: string) => invoke<null>("folder_put", { canvas, node, dir }),
+  /** Answers with the folder's new directory. */
+  renameFolder: (dir: string, name: string) => invoke<string>("folder_rename", { dir, name }),
   createProject: (name: string, repo: string | null) => invoke<Project>("project_create", { name, repo }),
   githubRepos: () => invoke<GithubRepo[]>("github_repos"),
   saveCanvas: (path: string, nodes: CanvasNode[]) => invoke<null>("canvas_save", { path, nodes }),

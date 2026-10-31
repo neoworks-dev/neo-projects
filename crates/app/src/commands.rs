@@ -14,6 +14,7 @@ use serde_json::{Map, Value, json};
 use svelte_gpui::{CommandError, Commands};
 
 use crate::canvas::{self, rel};
+use crate::folders;
 use crate::state::{App, Open, expand};
 
 type Answer = Result<Value, CommandError>;
@@ -70,6 +71,24 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         open.wrote(&path);
         workspace::write_canvas(&path, &workspace::Canvas::default()).map_err(fail)?;
         Ok(json!({"id": node_id(), "type": "file", "file": rel(&ws, &path), "x": 0, "y": 0, "width": 220, "height": 64}))
+    });
+    // The node `node` of the canvas `canvas` dropped on the folder `dir` (both workspace-relative).
+    command!("folder_put", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let root = open.ws().root().to_path_buf();
+        let from = root.join(arg(&args, "canvas")?);
+        folders::put(&open, &from, arg(&args, "node")?, &root.join(arg(&args, "dir")?)).map_err(fail)?;
+        app.emitter.emit("changed", json!({"reason": "folder"}));
+        Ok(Value::Null)
+    });
+    // Answers with the folder's new directory, workspace-relative.
+    command!("folder_rename", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let ws = open.ws().clone();
+        let dir = ws.root().join(arg(&args, "dir")?);
+        let to = folders::rename(&open, &dir, &sanitize(arg(&args, "name")?)).map_err(fail)?;
+        app.emitter.emit("changed", json!({"reason": "rename"}));
+        Ok(json!(rel(&ws, &to)))
     });
     command!("project_create", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;

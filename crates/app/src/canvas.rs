@@ -138,7 +138,7 @@ pub fn overview(ws: &Workspace, cache: &Cache) -> Result<(PathBuf, Value)> {
     ))
 }
 
-fn free_spot(canvas: &Canvas, w: f64, h: f64) -> (f64, f64) {
+pub(crate) fn free_spot(canvas: &Canvas, w: f64, h: f64) -> (f64, f64) {
     let gap = 40.0;
     for row in 0..200 {
         for col in 0..4 {
@@ -504,15 +504,21 @@ pub fn save(ws: &Workspace, cache: &Cache, path: &Path, nodes: &[Value]) -> Resu
     write_canvas(path, &canvas)
 }
 
-/// Every canvas in the workspace that names `old` (a workspace-relative path) now names `new`.
+/// Every canvas in the workspace that names `old` (a workspace-relative path), or a file below it
+/// when it is a directory, now names `new`.
 pub fn rename_in_canvases(ws: &Workspace, old: &str, new: &str) -> Result<Vec<PathBuf>> {
     let mut touched = Vec::new();
+    let below = format!("{old}/");
     for path in ws.files().into_iter().filter(|p| p.extension().is_some_and(|e| e == "canvas")) {
         let Ok(mut canvas) = read_canvas(&path) else { continue };
         let mut changed = false;
         for node in &mut canvas.nodes {
-            if node.file.as_deref() == Some(old) {
+            let Some(file) = node.file.as_deref() else { continue };
+            if file == old {
                 node.file = Some(new.to_string());
+                changed = true;
+            } else if let Some(rest) = file.strip_prefix(&below) {
+                node.file = Some(format!("{new}/{rest}"));
                 changed = true;
             }
         }
