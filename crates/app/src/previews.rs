@@ -1,6 +1,6 @@
-//! The preview thread: fetches the pages of web links and makes the posters of PDFs and videos,
-//! one at a time, with a connection of its own, and tells the window when a preview is ready so
-//! its card fills in.
+//! The preview thread: fetches the pages of web links and makes the posters of PDFs, videos and
+//! images, one at a time, with a connection of its own, and tells the window when a preview is
+//! ready so its card fills in.
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
@@ -65,7 +65,7 @@ impl Previews {
         }
     }
 
-    /// Asks for the poster of the file at `path` if it is a PDF or a video.
+    /// Asks for the poster of the file at `path` if it gets one.
     fn want_media(&self, path: PathBuf) {
         if media::kind(&path).is_some() {
             let _ = self.tx.send(Job::Media(path));

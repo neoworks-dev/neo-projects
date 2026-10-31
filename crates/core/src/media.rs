@@ -1,5 +1,6 @@
-//! Previews of PDFs and videos: a poster image and what to say under it (a PDF's page count, a
-//! video's length), made by poppler's `pdftoppm` and `pdfinfo` and by `ffmpeg` and `ffprobe`. Each
+//! Previews of PDFs, videos and images the window can't draw: a poster image and what to say under
+//! it (a PDF's page count, a video's length), made by poppler's `pdftoppm` and `pdfinfo` and by
+//! `ffmpeg` and `ffprobe`. Each
 //! is kept in the previews folder as `<key>.png` and `<key>.json`, the key hashing the file's path,
 //! size and modification time, so a changed file gets a new one. Without the tools, a file keeps
 //! its icon card.
@@ -15,10 +16,14 @@ use crate::{Error, Result};
 /// How wide a poster is drawn, in pixels: enough for a card at twice its size.
 const POSTER_WIDTH: u32 = 800;
 
+/// The image types the window decodes itself; the others are drawn from a PNG poster.
+const DRAWN_IMAGES: [&str; 5] = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"];
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Kind {
     Pdf,
     Video,
+    Image,
 }
 
 /// What kind of preview the file at `path` gets, if any.
@@ -29,6 +34,9 @@ pub fn kind(path: &Path) -> Option<Kind> {
     }
     if mime.starts_with("video/") {
         return Some(Kind::Video);
+    }
+    if mime.starts_with("image/") && !DRAWN_IMAGES.contains(&mime) {
+        return Some(Kind::Image);
     }
     None
 }
@@ -66,6 +74,7 @@ pub fn make(dir: &Path, path: &Path) -> Result<Media> {
     let made = match kind {
         Kind::Pdf => pdf(path, &dir.join(&poster)),
         Kind::Video => video(path, &dir.join(&poster)),
+        Kind::Image => image(path, &dir.join(&poster)),
     };
     let media = match made {
         Ok(media) => Media { poster: Some(poster), ..media },
@@ -111,6 +120,17 @@ fn video(path: &Path, poster: &Path) -> Result<Media> {
         .arg(format!("scale='min({POSTER_WIDTH},iw)':-2"))
         .arg(poster))?;
     Ok(Media { duration, ..Media::default() })
+}
+
+/// The image as a PNG `poster`, its first frame or layer for the types that hold several.
+fn image(path: &Path, poster: &Path) -> Result<Media> {
+    run(Command::new("ffmpeg")
+        .args(["-v", "error", "-y", "-i"])
+        .arg(path)
+        .args(["-frames:v", "1", "-vf"])
+        .arg(format!("scale='min({POSTER_WIDTH},iw)':-2"))
+        .arg(poster))?;
+    Ok(Media::default())
 }
 
 /// Runs a tool and answers with what it printed; a missing tool or a failure is an error.

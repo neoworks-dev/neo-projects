@@ -104,7 +104,7 @@
         transition: 140,
       }}
     >
-      <Image src={item.path} fit="fill" style={{ position: "absolute", inset: 0, radius: 8 - 1 }} />
+      <Image src={item.src} fit="fill" style={{ position: "absolute", inset: 0, radius: 8 - 1 }} />
     </View>
   </View>
 {:else if item.kind === "file" && item.media?.poster}
