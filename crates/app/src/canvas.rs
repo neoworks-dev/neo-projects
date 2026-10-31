@@ -354,7 +354,7 @@ fn preview_json(ws: &Workspace, preview: Preview) -> Value {
 }
 
 /// An image file's width divided by its height, from its header.
-fn aspect(path: &Path) -> Option<f64> {
+pub fn aspect(path: &Path) -> Option<f64> {
     let size = imagesize::size(path).ok()?;
     if size.height == 0 {
         return None;

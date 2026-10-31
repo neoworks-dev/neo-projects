@@ -8,7 +8,7 @@
   import type { Arrow, CanvasNode, Card, ProjectView, Stroke } from "../../lib/api.ts";
   import { arranged, type Arrangement } from "../../lib/canvas/arrange.ts";
   import { DROP_MS, dropFrame, folderOpening, HELD_SCALE, scaledBox } from "../../lib/canvas/dropIn.ts";
-  import { contains, freeSpot, type Point, type Rect } from "../../lib/canvas/geometry.ts";
+  import { contain, contains, freeSpot, type Point, type Rect } from "../../lib/canvas/geometry.ts";
   import { flatPoints, pointsOf } from "../../lib/canvas/strokes.ts";
   import { cubicBezier, glide, tween } from "../../lib/canvas/motion.ts";
   import {
@@ -224,9 +224,7 @@
   // dragged out of the rows keeps no place in them.
   const laidOut = $derived.by<Placed[]>(() => {
     const all = data?.nodes ?? [];
-    const own = all
-      .filter((n) => !n.in)
-      .map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.width, h: n.height, raw: n }));
+    const own = all.filter((n) => !n.in).map((n) => ({ id: n.id, x: n.x, y: n.y, ...sizeOf(n), raw: n }));
     const folderNode = own.find((n) => n.id === unfolded);
     if (!folderNode) return own;
     const inner = all.filter((n) => n.in?.folder === unfolded);
@@ -240,9 +238,10 @@
       const t = easeOut(stagger(spread, order.indexOf(n.id), order.length));
       if (index < PEEK) gone.push(shown(t));
       const card = peekCard(folderNode, Math.min(index, PEEK - 1));
-      const way = outOf(card, spot, n.width, t);
+      const size = sizeOf(n);
+      const way = outOf(card, spot, size.w, t);
       const origin = { x: 0, y: 0 };
-      return { id: n.id, x: way.x, y: way.y, w: n.width, h: n.height, raw: n, opacity: shown(t), scale: way.scale, origin };
+      return { id: n.id, x: way.x, y: way.y, ...size, raw: n, opacity: shown(t), scale: way.scale, origin };
     });
     const rows = rowsBox(spots, inner.map(folded));
     if (!rows) return [...own, ...laid];
@@ -296,7 +295,18 @@
 
   /** An unfolded folder's node as its rows sort and size it. */
   function folded(n: CanvasNode): Folded {
-    return { id: n.id, kind: n.item?.kind ?? n.type, title: nameOf(n), w: n.width, h: n.height };
+    return { id: n.id, kind: n.item?.kind ?? n.type, title: nameOf(n), ...sizeOf(n) };
+  }
+
+  /**
+   * How big a node is drawn: its saved size, except that an image takes its own proportions
+   * inside it, from the top left, so the node is no bigger than the picture. The saved size
+   * stays as it was, so moving the node saves no drift.
+   */
+  function sizeOf(n: CanvasNode): { w: number; h: number } {
+    const item = n.item;
+    if (item?.kind !== "image" || !item.aspect) return { w: n.width, h: n.height };
+    return contain(n.width, n.height, item.aspect);
   }
   const boardNode = $derived(nodes.find((n) => n.raw.item?.kind === "board"));
   const arrows = $derived(

@@ -589,9 +589,14 @@ fn link_files(open: &Open, paths: &[PathBuf]) -> np_core::Result<Value> {
         }
         let offset = i as f64 * 30.0;
         let image = workspace::mime_for(&path).starts_with("image/");
-        // A PDF's poster is a page, upright; a video's a frame, wide.
+        // An image's box has its own proportions, at most 360 on its longer side, so the node is
+        // no bigger than the picture. A PDF's poster is a page, upright; a video's a frame, wide.
         let (w, h) = if image {
-            (360.0, 260.0)
+            match canvas::aspect(&path) {
+                Some(aspect) if aspect >= 1.0 => (360.0, (360.0 / aspect).round()),
+                Some(aspect) => ((360.0 * aspect).round(), 360.0),
+                None => (360.0, 260.0),
+            }
         } else if media::kind(&path) == Some(media::Kind::Pdf) {
             (240.0, 340.0)
         } else if media::kind(&path) == Some(media::Kind::Video) {
