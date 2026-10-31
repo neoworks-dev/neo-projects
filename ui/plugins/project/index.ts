@@ -19,9 +19,12 @@ export const project = {
       if (app.state.route.view !== "project" || !projectKeys.note || app.state.selection?.kind === "note") return false;
       projectKeys.note();
     });
-    keymap.bind("l", () => {
-      if (app.state.route.view !== "project" || !projectKeys.link || app.state.selection?.kind === "note") return false;
-      projectKeys.link();
+    // Ctrl chords reach the keymap from fields too; there the field pastes the text itself.
+    keymap.bind("ctrl-v", (event) => {
+      const target = event.target as { localName?: string } | null | undefined;
+      if (target?.localName === "g-input" || target?.localName === "g-element") return false;
+      if (app.state.route.view !== "project" || !projectKeys.paste || app.state.selection?.kind === "note") return false;
+      projectKeys.paste();
     });
     keymap.bind("s", () => {
       if (app.state.route.view !== "project" || !projectKeys.sticky || app.state.selection?.kind === "note") return false;

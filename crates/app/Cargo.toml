@@ -14,3 +14,4 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 rquickjs = "0.14.0"
 serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v7"] }
+imagesize = "0.13"

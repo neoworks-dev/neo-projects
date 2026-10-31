@@ -2720,6 +2720,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "html-escape"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
+
+[[package]]
 name = "http"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3601,6 +3607,7 @@ dependencies = [
 name = "neoworks-projects"
 version = "0.1.0"
 dependencies = [
+ "imagesize",
  "np-core",
  "rquickjs",
  "rusqlite",
@@ -3721,6 +3728,7 @@ name = "np-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "html-escape",
  "notify",
  "notify-debouncer-full",
  "rusqlite",
@@ -3730,7 +3738,9 @@ dependencies = [
  "syntect",
  "tempfile",
  "thiserror 2.0.21",
+ "tl",
  "ureq",
+ "url",
  "uuid",
 ]
 
@@ -5011,7 +5021,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6111,6 +6121,12 @@ name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
+
+[[package]]
+name = "tl"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b130bd8a58c163224b44e217b4239ca7b927d82bf6cc2fea1fc561d15056e3f7"
 
 [[package]]
 name = "tokio"

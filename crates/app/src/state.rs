@@ -11,6 +11,7 @@ use np_core::{Cache, Error, Result};
 use serde_json::json;
 use svelte_gpui::Emitter;
 
+use crate::previews::Previews;
 use crate::sync::{Sync, SyncStatus};
 
 pub struct App {
@@ -23,6 +24,7 @@ pub struct Open {
     pub ws: Mutex<Workspace>,
     pub cache: Mutex<Cache>,
     pub sync: Sync,
+    pub previews: Previews,
     /// Files the window itself wrote just now, so the watcher doesn't report them back.
     written: Mutex<HashMap<PathBuf, Instant>>,
     _watch: Mutex<Option<WatchHandle>>,
@@ -57,11 +59,13 @@ impl App {
         let cache = Cache::open(&ws.cache_path())?;
         workspace::index_all(&ws, &cache)?;
         let sync = Sync::start(ws.clone(), self.emitter.clone())?;
+        let previews = Previews::start(&ws, self.emitter.clone())?;
         let open = Arc::new(Open {
             root: root.clone(),
             ws: Mutex::new(ws),
             cache: Mutex::new(cache),
             sync,
+            previews,
             written: Mutex::new(HashMap::new()),
             _watch: Mutex::new(None),
         });

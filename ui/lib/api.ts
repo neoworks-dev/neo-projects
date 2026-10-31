@@ -95,13 +95,24 @@ export type Item =
   | { kind: "image"; uri: string | null; path: string; title: string }
   | { kind: "file"; uri: string | null; path: string; title: string; mime: string | null }
   | { kind: "issue"; uri: string; card: Card }
-  | { kind: "link"; uri: string; title: string; host: string }
+  | { kind: "link"; uri: string; title: string; host: string; preview?: LinkPreview }
   | { kind: "board"; uri: string }
   | { kind: "localboard"; uri: string; path: string; title: string; groupBy: string; columns: LocalColumn[] }
   | { kind: "project"; uri: string; project: Project }
   | { kind: "text"; uri: null; text: string | null }
   | { kind: "group"; uri: null; title: string | null }
   | { kind: "missing"; uri: string | null; title: string };
+
+/** What a web page says about itself, fetched by the host. Images are absolute paths. */
+export interface LinkPreview {
+  title: string | null;
+  description: string | null;
+  site: string | null;
+  image: string | null;
+  /** The image's width divided by its height, when it could be read. */
+  imageAspect: number | null;
+  favicon: string | null;
+}
 
 export interface LocalColumn {
   value: string | null;

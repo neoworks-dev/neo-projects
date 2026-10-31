@@ -2,22 +2,24 @@
   // A project's canvas: its GitHub board as one region, and around it whatever you place: issues
   // dragged out of the board, notes, files, links, local boards. Arrows are relationships: between
   // two issues they can be blocks or sub-issues on GitHub; anything else is kept in the workspace.
-  import { Button, Input, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
+  import { clipboard } from "@neoworks/svelte-gpui";
+  import { Button, Presence, Text, View } from "@neoworks/svelte-gpui/ui";
   import { fade, fly } from "svelte/transition";
   import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
   import { glide } from "../../lib/canvas/motion.ts";
+  import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { app } from "../../lib/state.svelte.ts";
-  import { c, eyebrow, field, fieldFocus, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
+  import { c, eyebrow, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
   import Files, { isFileDrag } from "./Files.svelte";
   import ItemNode from "./ItemNode.svelte";
   import StickyNote, { stickyColors } from "./StickyNote.svelte";
   import { projectKeys } from "./keys.svelte.ts";
   import { icons } from "../../lib/icons.ts";
-  const { board: kanban, link: linkIcon, files: treeView, note: notePencil } = icons;
+  const { board: kanban, files: treeView, note: notePencil } = icons;
 
   let { folder }: { folder: string } = $props();
 
@@ -26,12 +28,7 @@
   let selected = $state<string | null>(null);
   let selectedArrow = $state<string | null>(null);
   let connecting = $state<{ from: string; to: string } | null>(null);
-  let linkUrl = $state("");
-  let linkOpen = $state(false);
   let size = $state({ width: 800, height: 600 });
-  let linkInput = $state<Input>();
-
-  $effect(() => linkInput?.focus());
 
   async function newBoard() {
     const project = data?.project;
@@ -47,7 +44,6 @@
     { icon: treeView, label: "Files", key: "F", onpress: () => (filesOpen = !filesOpen) },
     { icon: notePencil, label: "Note", key: "N", onpress: () => void newNote(centre()) },
     { icon: icons.sticky, label: "Sticky note", key: "S", onpress: () => newSticky(centre()) },
-    { icon: linkIcon, label: "Link", key: "L", onpress: () => (linkOpen = !linkOpen) },
     { icon: kanban, label: "Notes board", onpress: () => void newBoard() },
   ];
 
@@ -138,13 +134,14 @@
   }
 
   /**
-   * How small a node can be resized, so its title stays readable: sticky notes, notes and issue
-   * cards resize, the rest keep their size.
+   * How small a node can be resized, so its title stays readable: sticky notes, notes, issue
+   * cards and web links resize, the rest keep their size.
    */
   function minSize(n: Placed): { w: number; h: number } | null {
     if (n.raw.type === "text") return { w: 120, h: 80 };
     if (n.raw.item?.kind === "note") return { w: 160, h: 90 };
     if (n.raw.item?.kind === "issue") return { w: 200, h: 96 };
+    if (n.raw.item?.kind === "link") return { w: 200, h: 72 };
     return null;
   }
 
@@ -219,6 +216,14 @@
 
   function centre(): Point {
     return { x: view.x + (size.width / 2 - 140) / view.zoom, y: view.y + (size.height / 2 - 80) / view.zoom };
+  }
+
+  /** Adds the link on the clipboard to the middle of the view; other text is left alone. */
+  async function paste() {
+    const url = pastedUrl(await clipboard.read());
+    if (!url) return;
+    const node = await app.run(() => app.api.linkUrl(url));
+    if (node) add(node, centre());
   }
 
   async function files(paths: string[], at: Point) {
@@ -326,13 +331,13 @@
   $effect(() => {
     projectKeys.remove = removeSelected;
     projectKeys.note = () => void newNote(centre());
-    projectKeys.link = () => (linkOpen = true);
+    projectKeys.paste = paste;
     projectKeys.files = () => (filesOpen = !filesOpen);
     projectKeys.sticky = () => newSticky(centre());
     return () => {
       projectKeys.remove = null;
       projectKeys.note = null;
-      projectKeys.link = null;
+      projectKeys.paste = null;
       projectKeys.files = null;
       projectKeys.sticky = null;
     };
@@ -387,39 +392,6 @@
         style={{ position: "absolute", top: 12, left: 12, bottom: 12, direction: "row" }}
       >
         <Files project={data.project} onclose={() => (filesOpen = false)} />
-      </Presence>
-    {/if}
-
-    {#if linkOpen}
-      <Presence
-        in={[fly, { y: 8, duration: 180 }]}
-        out={[fade, { duration: 120 }]}
-        style={{ position: "absolute", bottom: 72, left: 0, right: 0, align: "center" }}
-      >
-        <View
-          style={{ width: 360, padding: 10, gap: 8, radius: radii.card, background: c.surface, borderWidth: 1, borderColor: c.border, shadow }}
-          onpress={() => {}}
-        >
-          <Input
-            bind:value={linkUrl}
-            placeholder="Paste a link, Enter to add"
-            bind:this={linkInput}
-            style={field}
-            focus={fieldFocus}
-            onsubmit={async () => {
-              const url = linkUrl.trim();
-              linkOpen = false;
-              linkUrl = "";
-              if (!url) return;
-              const node = await app.run(() => app.api.linkUrl(url));
-              if (node) add(node, centre());
-            }}
-            oncommit={() => {
-              if (!linkUrl.trim()) linkOpen = false;
-            }}
-          />
-          <Text style={{ fontSize: 11, color: c.faint, paddingX: 2 }}>Files: drop them from your file manager.</Text>
-        </View>
       </Presence>
     {/if}
 

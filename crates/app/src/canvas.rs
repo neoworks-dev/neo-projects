@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use np_core::previews::{self, Preview};
 use np_core::views;
 use np_core::workspace::{self, Canvas, Node, Project, Uri, Workspace, issues, read_canvas, read_note, write_canvas};
 use np_core::{Cache, Error, Result};
@@ -269,7 +270,11 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
                 .and_then(Value::as_str)
                 .map(str::to_string)
                 .unwrap_or_else(|| url.split("//").nth(1).unwrap_or(&url).trim_end_matches('/').to_string());
-            Ok(json!({"kind": "link", "uri": url, "title": title, "host": host}))
+            let mut link = json!({"kind": "link", "uri": url, "title": title, "host": host});
+            if let Some(preview) = previews::get_preview(cache, &url)? {
+                link["preview"] = preview_json(ws, preview);
+            }
+            Ok(link)
         }
         "file" => {
             let rel_path = node.file.clone().unwrap_or_default();
@@ -284,6 +289,31 @@ pub fn item(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
         }
         _ => Ok(json!({"kind": "missing", "uri": uri.map(|u| u.to_string()), "title": node.kind})),
     }
+}
+
+/// A link's preview with its images as absolute paths, for the window to draw, and the image's
+/// width divided by its height.
+fn preview_json(ws: &Workspace, preview: Preview) -> Value {
+    let dir = crate::previews::dir(ws);
+    let image = preview.image.map(|f| dir.join(f));
+    let favicon = preview.favicon.map(|f| dir.join(f).to_string_lossy().into_owned());
+    json!({
+        "title": preview.title,
+        "description": preview.description,
+        "site": preview.site,
+        "imageAspect": image.as_deref().and_then(aspect),
+        "image": image.map(|p| p.to_string_lossy().into_owned()),
+        "favicon": favicon,
+    })
+}
+
+/// An image file's width divided by its height, from its header.
+fn aspect(path: &Path) -> Option<f64> {
+    let size = imagesize::size(path).ok()?;
+    if size.height == 0 {
+        return None;
+    }
+    Some(size.width as f64 / size.height as f64)
 }
 
 /// The card of the local issue a file is, if it is one.

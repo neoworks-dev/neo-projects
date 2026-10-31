@@ -80,6 +80,7 @@ order: { doing: [<note id>, …] }
 - **Index:** `files`, `notes`, `search` (FTS5), `thumbs`, `relations`
 - **GitHub mirror:** `gh_repos`, `gh_issues`, `gh_comments`
 - **Sync:** `gh_base`, `outbox`, `conflicts` (the only tables that can't be rebuilt)
+- **Link previews:** `link_previews`, with their images in `.neoworks-projects/previews/`
 - **Other:** `jobs`, `chats`
 
 ## Plugin services

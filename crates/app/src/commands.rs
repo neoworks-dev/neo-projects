@@ -47,6 +47,7 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         let ws = open.ws().clone();
         let (path, view) = canvas::overview(&ws, &open.cache()).map_err(fail)?;
         open.wrote(&path);
+        open.previews.want_view(&view);
         Ok(view)
     });
     command!("project_view", |app: &App, args: Value| {
@@ -54,7 +55,9 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
         let ws = open.ws().clone();
         let project = canvas::find_project(&ws, arg(&args, "project")?).map_err(fail)?;
         open.wrote(&canvas::project_canvas_path(&project));
-        canvas::project_view(&ws, &open.cache(), arg(&args, "project")?).map_err(fail)
+        let view = canvas::project_view(&ws, &open.cache(), arg(&args, "project")?).map_err(fail)?;
+        open.previews.want_view(&view);
+        Ok(view)
     });
     command!("project_create", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;
@@ -257,10 +260,12 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
             args["paths"].as_array().into_iter().flatten().filter_map(Value::as_str).map(PathBuf::from).collect();
         link_files(&open, &paths).map_err(fail)
     });
-    command!("url_link", |_app: &App, args: Value| {
+    command!("url_link", |app: &App, args: Value| {
         let url = arg(&args, "url")?.trim().to_string();
         let url = if url.contains("://") { url } else { format!("https://{url}") };
-        Ok(json!({"id": node_id(), "type": "link", "url": url, "x": 0, "y": 0, "width": 300, "height": 84}))
+        app.get().map_err(fail)?.previews.want(&url);
+        // Tall enough for the preview image above the title.
+        Ok(json!({"id": node_id(), "type": "link", "url": url, "x": 0, "y": 0, "width": 320, "height": 260}))
     });
     command!("board_create", |app: &App, args: Value| {
         let open = app.get().map_err(fail)?;

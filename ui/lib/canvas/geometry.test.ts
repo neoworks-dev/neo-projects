@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { arrowPath, gapBetween, handlePoint, midpoint, resized } from "./geometry.ts";
+import { arrowPath, dotPoint, gapBetween, grabZone, midpoint, near, nearestSide, resized } from "./geometry.ts";
 
 const box = (x: number, y: number) => ({ x, y, w: 100, h: 60 });
 
@@ -56,9 +56,36 @@ describe("resized", () => {
   });
 });
 
-test("handles sit on the border", () => {
-  expect(handlePoint({ x: 0, y: 0, w: 100, h: 60 }, "ne")).toEqual({ x: 100, y: 0 });
-  expect(handlePoint({ x: 0, y: 0, w: 100, h: 60 }, "s")).toEqual({ x: 50, y: 60 });
+test("grab zones straddle the border, in screen pixels", () => {
+  const r = { x: 10, y: 20, w: 100, h: 60 };
+  expect(grabZone(r, "ne", 2)).toEqual({ x: 212, y: 32, w: 16, h: 16 });
+  expect(grabZone(r, "s", 2)).toEqual({ x: 20, y: 156, w: 200, h: 8 });
+  expect(grabZone(r, "w", 1)).toEqual({ x: 6, y: 20, w: 8, h: 60 });
+});
+
+test("arrow dots sit past the middle of each side and tuck back under it", () => {
+  const r = { x: 10, y: 20, w: 100, h: 60 };
+  expect(dotPoint(r, "n", 2, 14)).toEqual({ at: { x: 120, y: 26 }, back: { x: 0, y: 14 } });
+  expect(dotPoint(r, "e", 1, 14)).toEqual({ at: { x: 124, y: 50 }, back: { x: -14, y: 0 } });
+  expect(dotPoint(r, "s", 1, 14)).toEqual({ at: { x: 60, y: 94 }, back: { x: 0, y: -14 } });
+  expect(dotPoint(r, "w", 1, 14)).toEqual({ at: { x: -4, y: 50 }, back: { x: 14, y: 0 } });
+});
+
+test("the nearest side is the closest edge, from inside or outside", () => {
+  const r = { x: 0, y: 0, w: 200, h: 100 };
+  expect(nearestSide(r, { x: 100, y: 10 })).toBe("n");
+  expect(nearestSide(r, { x: 190, y: 50 })).toBe("e");
+  expect(nearestSide(r, { x: 100, y: 115 })).toBe("s");
+  expect(nearestSide(r, { x: -12, y: 20 })).toBe("w");
+});
+
+test("near finds the topmost node within the margin", () => {
+  const under = { id: "under", x: 0, y: 0, w: 100, h: 100 };
+  const over = { id: "over", x: 50, y: 50, w: 100, h: 100 };
+  expect(near([under, over], { x: 75, y: 75 }, 0)?.id).toBe("over");
+  expect(near([under, over], { x: 180, y: 100 }, 40)?.id).toBe("over");
+  expect(near([under, over], { x: -30, y: 10 }, 40)?.id).toBe("under");
+  expect(near([under, over], { x: 300, y: 300 }, 40)).toBeNull();
 });
 
 test("midpoint is halfway by length", () => {

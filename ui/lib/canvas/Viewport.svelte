@@ -26,10 +26,12 @@
 <script lang="ts" generics="N extends VNode, A extends VArrow">
   // An infinite canvas: nodes placed in world coordinates, drawn at the view's zoom, with arrows
   // between them. Drag the background to pan, the wheel to pan, Ctrl+wheel to zoom. Drag a node to
-  // move it; drag the handle on the selected node's edge onto another node to connect them. Files
+  // move it, or its sides and corners to resize it. Near a node, a dot slides out past the edge
+  // nearest the pointer; drag it onto another node to connect them. Files
   // from other programs and in-app drags (a card from a board) can be dropped anywhere.
   import {
     DropTarget,
+    Presence,
     Text,
     View,
     type DragInfo,
@@ -39,8 +41,23 @@
     type WheelEvent,
   } from "@neoworks/svelte-gpui/ui";
   import type { Snippet } from "svelte";
+  import { fly } from "svelte/transition";
   import { c } from "../theme.ts";
-  import { arrowPath, contains, handlePoint, handles, midpoint, resized, type Handle, type Point, type Rect } from "./geometry.ts";
+  import {
+    arrowPath,
+    contains,
+    dotPoint,
+    grabZone,
+    handles,
+    midpoint,
+    near,
+    nearestSide,
+    resized,
+    type Handle,
+    type Point,
+    type Rect,
+    type Side,
+  } from "./geometry.ts";
   import Ink from "./Ink.svelte";
 
   interface Props {
@@ -103,6 +120,31 @@
   /** An arrow being drawn: from which node, to where the pointer is (viewport coordinates). */
   let link = $state<{ from: string; to: Point } | null>(null);
   let pointer: Point | null = null;
+
+  /** How close the pointer comes to a node, in screen pixels, before its arrow dot shows. */
+  const NEAR = 20;
+  /** How far the dot slides out past the node's edge, in screen pixels. */
+  const DOT_OUT = 16;
+  /** The node the pointer is near and the side it is nearest, where the arrow dot is out. */
+  let nearby = $state<{ id: string; side: Side } | null>(null);
+  /** The pointer is on the dot's grab area, so a press there starts an arrow. */
+  let dotHot = $state(false);
+
+  function track(e: PointerEvent) {
+    if (!linkable || link) return;
+    const at = toWorld(local(e));
+    const found = near(shown, at, NEAR / zoom);
+    if (!found) {
+      if (nearby) nearby = null;
+      dotHot = false;
+      return;
+    }
+    const side = nearestSide(found, at);
+    if (nearby?.id === found.id && nearby.side === side) return;
+    // A dot taken away under the pointer never hears it leave.
+    nearby = { id: found.id, side };
+    dotHot = false;
+  }
 
   const zoom = $derived(view.zoom);
   const toWorld = (p: Point): Point => ({ x: p.x / zoom + view.x, y: p.y / zoom + view.y });
@@ -215,6 +257,7 @@
 
   function backgroundMove(e: PointerEvent) {
     pointer = local(e);
+    track(e);
     const start = pan;
     if (!start) return;
     const { windowX, windowY } = e;
@@ -260,6 +303,7 @@
   }
 
   function nodeMove(e: PointerEvent) {
+    track(e);
     if (!drag) return;
     const { windowX, windowY } = e;
     later(() => {
@@ -334,7 +378,14 @@
   }
 </script>
 
-<View style={{ flex: 1, overflow: "hidden" }} onlayout={(l) => (box = l)} ondrop={files}>
+<View
+  style={{ flex: 1, overflow: "hidden" }}
+  onlayout={(l) => (box = l)}
+  ondrop={files}
+  onhover={(inside) => {
+    if (!inside) nearby = null;
+  }}
+>
   <DropTarget {accept} ondrop={dropped} style={{ position: "absolute", inset: 0 }}>
     <View
       style={{ position: "absolute", inset: 0, background: c.bg, cursor: panning ? "grabbing" : "default" }}
@@ -387,6 +438,39 @@
       </View>
     {/each}
     {#each visible as n (n.id)}
+      {#if linkable && nearby?.id === n.id && !drag && !resize}
+        <!-- The dot for drawing an arrow, on the side nearest the pointer, drawn before the node
+             so it slides out from under that edge. Keyed by side: moving to another side slides
+             this one back in and the next one out. Its grab area is larger than the dot, and the
+             dot fills while the pointer is on it. -->
+        {#each [nearby.side] as side (side)}
+          {@const dot = dotPoint(n, side, zoom, DOT_OUT)}
+          <Presence
+            in={[fly, { ...dot.back, duration: 160 }]}
+            out={[fly, { ...dot.back, duration: 120 }]}
+            style={{ position: "absolute", left: dot.at.x - 11, top: dot.at.y - 11 }}
+          >
+            <View
+              style={{ size: 22, align: "center", justify: "center", cursor: "crosshair" }}
+              onhover={(inside) => (dotHot = inside)}
+              ondown={(e) => linkDown(n, e)}
+              onmove={linkMove}
+              onup={linkUp}
+            >
+              <View
+                style={{
+                  size: 11,
+                  radius: 6,
+                  background: dotHot || link ? c.accent : c.surface,
+                  borderWidth: 2,
+                  borderColor: c.accent,
+                  transition: 120,
+                }}
+              />
+            </View>
+          </Presence>
+        {/each}
+      {/if}
       <View
         style={{ position: "absolute", left: n.x * zoom, top: n.y * zoom, width: n.w * zoom, height: n.h * zoom }}
         ondown={(e) => nodeDown(n, e)}
@@ -395,62 +479,24 @@
       >
         {@render node(n, zoom)}
       </View>
-      {@const min = selected === n.id ? minSize(n) : null}
-      {#if min}
-        <!-- Squares on the corners and sides, each in a larger hit area so it is easy to grab. -->
+      {#if minSize(n)}
+        <!-- Invisible strips on the sides and squares on the corners: dragging there resizes. -->
         {#each handles as handle (handle)}
-          {@const at = handlePoint(n, handle)}
-          {@const side = handle.length === 1}
+          {@const zone = grabZone(n, handle, zoom)}
           <View
             style={{
               position: "absolute",
-              left: at.x * zoom - 9,
-              top: at.y * zoom - 9,
-              size: 18,
-              align: "center",
-              justify: "center",
-              cursor: !side ? "default" : handle === "e" || handle === "w" ? "col-resize" : "row-resize",
+              left: zone.x,
+              top: zone.y,
+              width: zone.w,
+              height: zone.h,
+              cursor: handle.length === 2 ? "default" : handle === "e" || handle === "w" ? "col-resize" : "row-resize",
             }}
             ondown={(e) => resizeDown(n, handle, e)}
             onmove={(e) => resizeMove(n, e)}
             onup={resizeUp}
-          >
-            <View
-              style={{ size: side ? 7 : 9, radius: 2, background: c.surface, borderWidth: 1.5, borderColor: c.accent }}
-              hover={{ background: c.accent }}
-            />
-          </View>
-        {/each}
-      {/if}
-      {#if linkable && selected === n.id}
-        <!-- A small dot past the right edge (clear of a resize handle there), in a larger hit
-             area so it is easy to grab. -->
-        <View
-          style={{
-            position: "absolute",
-            left: (n.x + n.w) * zoom - 11 + (min ? 22 : 0),
-            top: (n.y + n.h / 2) * zoom - 11,
-            size: 22,
-            align: "center",
-            justify: "center",
-            cursor: "crosshair",
-          }}
-          ondown={(e) => linkDown(n, e)}
-          onmove={linkMove}
-          onup={linkUp}
-        >
-          <View
-            style={{
-              size: 11,
-              radius: 6,
-              background: c.surface,
-              borderWidth: 2,
-              borderColor: c.accent,
-              transition: 120,
-            }}
-            hover={{ background: c.accent }}
           />
-        </View>
+        {/each}
       {/if}
     {/each}
   </View>

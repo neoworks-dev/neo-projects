@@ -9,6 +9,7 @@
 mod canvas;
 mod commands;
 mod math;
+mod previews;
 mod state;
 mod sync;
 

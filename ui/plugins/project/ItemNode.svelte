@@ -67,9 +67,39 @@
     </View>
   </View>
 {:else if item.kind === "link"}
-  <View style={{ ...frame, padding: s(12), gap: s(4), justify: "center" }}>
-    <Text style={{ fontSize: s(10), color: c.accent, uppercase: true }}>{item.host}</Text>
-    <Text style={{ fontSize: s(13), maxLines: 2 }}>{item.title}</Text>
+  <View style={frame}>
+    {#if item.preview?.image}
+      <!-- The card's overflow clips square, so the image rounds its own top corners. GPUI rounds
+           the image as drawn, not its box, so the box takes the image's proportions: a cover
+           image scaled past its box would have its rounded corners cut off. 1.91 is Open Graph's
+           recommended shape, for an image whose size couldn't be read. -->
+      <Image
+        src={item.preview.image}
+        fit="cover"
+        style={{
+          width: "full",
+          aspectRatio: item.preview.imageAspect ?? 1.91,
+          shrink: 0,
+          radius: [s(10) - 1, s(10) - 1, 0, 0],
+        }}
+      />
+    {/if}
+    <View style={{ padding: s(12), gap: s(4), justify: item.preview?.image ? "start" : "center", flex: 1 }}>
+      <View style={{ direction: "row", align: "center", gap: s(6) }}>
+        {#if item.preview?.favicon}
+          <Image src={item.preview.favicon} fit="contain" style={{ width: s(12), height: s(12) }} />
+        {/if}
+        <Text style={{ fontSize: s(10), color: c.accent, uppercase: true, truncate: true }}>
+          {item.preview?.site ?? item.host}
+        </Text>
+      </View>
+      <Text style={{ fontSize: s(13), maxLines: 2 }}>{item.preview?.title ?? item.title}</Text>
+      {#if item.preview?.description && zoom >= 0.45}
+        <Text style={{ fontSize: s(11.5), color: c.muted, lineHeight: s(16), maxLines: 2 }}>
+          {item.preview.description}
+        </Text>
+      {/if}
+    </View>
   </View>
 {:else if item.kind === "localboard"}
   <LocalBoard {item} {zoom} {selected} />
