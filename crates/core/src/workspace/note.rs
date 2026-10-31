@@ -253,9 +253,15 @@ pub fn attach_file(folder: &Path, source: &Path) -> Result<PathBuf> {
     if source.parent() == Some(folder) {
         return Ok(source.to_path_buf());
     }
-    let Some(name) = source.file_name().map(Path::new) else {
+    let Some(name) = source.file_name() else {
         return Err(Error::Other(format!("{} is not a file", source.display())));
     };
+    copy_file_as(folder, source, &name.to_string_lossy())
+}
+
+/// Copies `source` into `folder` as `name` (`name 2.png` when taken), and returns where it went.
+pub fn copy_file_as(folder: &Path, source: &Path, name: &str) -> Result<PathBuf> {
+    let name = Path::new(name);
     let stem = name.file_stem().unwrap_or_default().to_string_lossy();
     let extension = name.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     for n in 1.. {

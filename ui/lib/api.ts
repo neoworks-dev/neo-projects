@@ -323,6 +323,8 @@ export const api = {
   /** Copies a file into the note's folder; answers with the name the note links it by. */
   attachToNote: (path: string, file: string) => invoke<string>("note_attach", { path, file }),
   linkFiles: (paths: string[]) => invoke<CanvasNode[]>("files_link", { paths }),
+  /** Copies a file from outside the workspace into the folder `dir` as `name` (`name 2` when taken). */
+  copyFileIn: (dir: string, file: string, name: string) => invoke<CanvasNode>("file_copy_in", { dir, file, name }),
   linkUrl: (url: string) => invoke<CanvasNode>("url_link", { url }),
   open: (target: string) => invoke<null>("open_external", { target }),
   listDir: (path: string) => invoke<DirEntry[]>("dir_list", { path }),
