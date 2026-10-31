@@ -21,13 +21,17 @@
   });
 
   const open = $derived(app.route.view === "project" ? app.route.project : null);
+
+  // A tooltip's wrapper aligns itself to the start; on the rail every button sits in the middle.
+  const centred = { alignSelf: "center" } as const;
 </script>
 
 {#snippet marker(on: boolean)}
   <View
     style={{
       position: "absolute",
-      left: -8,
+      // At the rail's edge: the rail is 46 wide and a button 36, centred.
+      left: -5,
       top: 9,
       width: 3,
       height: 18,
@@ -40,7 +44,7 @@
 {/snippet}
 
 {#if app.workspace}
-  <Tooltip text="All projects" placement="right">
+  <Tooltip text="All projects" placement="right" anchorStyle={centred}>
     <View>
       {@render marker(app.route.view === "overview")}
       <Button
@@ -64,7 +68,7 @@
   {#each projects as project (project.folder)}
     {@const on = open === project.folder}
     {@const tint = projectColor(project.name)}
-    <Tooltip text={project.repo ?? `${project.name} · local`} placement="right">
+    <Tooltip text={project.repo ?? `${project.name} · local`} placement="right" anchorStyle={centred}>
       <View>
         {@render marker(on)}
         <Button
@@ -86,7 +90,7 @@
       </View>
     </Tooltip>
   {/each}
-  <Tooltip text="New project" placement="right">
+  <Tooltip text="New project" placement="right" anchorStyle={centred}>
     <Button
       style={{ size: 36, radius: 10, align: "center", justify: "center", color: c.faint, transition: 140 }}
       hover={{ background: c.hover, color: c.text }}
