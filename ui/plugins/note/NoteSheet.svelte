@@ -216,6 +216,8 @@
       borderColor: c.border,
       shadow,
       overflow: "hidden",
+      // A view that takes presses shows a hand, but this one only keeps them from the canvas.
+      cursor: "default",
     }}
     onpress={() => {}}
   >
@@ -279,7 +281,7 @@
               theme={bodyTheme}
               wrap
               lineNumbers={false}
-              style={{ flex: 1 }}
+              style={{ flex: 1, cursor: "text" }}
               onblur={() => void save()}
               onkey={(e) => {
                 if (e.key === "Escape" || (e.key === "e" && (e.ctrl || e.meta))) {
