@@ -1,6 +1,6 @@
 // Colours and the few styles everything shares, from the NeoWorks design system's dark theme:
-// warm greys, hairline borders, a white fill for the one main action, lake blue for selection and
-// focus. Colour only where it means something (a status, a label, a selection).
+// warm greys, hairline borders, and white for the main action, selection and focus. Colour only
+// where it means something (a status, a label).
 import { setThemeMode, themes } from "@neoworks/svelte-gpui-ui";
 import type { Shadow, Style } from "@neoworks/svelte-gpui/ui";
 
@@ -27,11 +27,11 @@ export const c = {
   fill: t.colors.fill,
   fillHover: t.colors.fillHover,
   onFill: t.colors.onFill,
-  accent: t.scales.lake[9],
-  accentHover: t.scales.lake[10],
-  accentText: t.scales.lake[11],
-  accentSoft: "#4576b433",
-  onAccent: t.colors.text,
+  accent: t.colors.fill,
+  accentHover: t.colors.fillHover,
+  accentText: t.colors.text,
+  accentSoft: "#f1f0ed24",
+  onAccent: t.colors.onFill,
   danger: t.colors.danger,
   dangerSoft: t.colors.dangerSoft,
   warn: t.colors.warning,
@@ -52,7 +52,7 @@ export const shadow: Shadow[] = [
  * the card keeps the same weight as its neighbours.
  */
 export const ring: Shadow[] = [
-  { x: 0, y: 0, blur: 0, spread: 3, color: "#4576b438" },
+  { x: 0, y: 0, blur: 0, spread: 3, color: "#f1f0ed1f" },
   { x: 0, y: 10, blur: 28, spread: -8, color: "rgba(0, 0, 0, 0.6)" },
 ];
 
