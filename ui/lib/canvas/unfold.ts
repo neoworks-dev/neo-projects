@@ -45,6 +45,16 @@ export function unfoldLayout(folder: Rect, things: Folded[]): Map<string, Point>
   return spots;
 }
 
+/** The box the things of `things` that have a spot take in the rows; null when none has. */
+export function rowsBox(spots: Map<string, Point>, things: Folded[]): Rect | null {
+  const placed = things.flatMap((thing) => {
+    const spot = spots.get(thing.id);
+    if (!spot) return [];
+    return [{ ...spot, w: thing.w, h: thing.h }];
+  });
+  return bounds(placed);
+}
+
 /** Kept clear between an unfolded folder's contents and the nodes they push aside. */
 const CLEAR = 32;
 

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bounds, onTheWay, pushAside, stagger, unfoldLayout } from "./unfold.ts";
+import { bounds, onTheWay, pushAside, rowsBox, stagger, unfoldLayout } from "./unfold.ts";
 
 const folder = { x: 0, y: 100, w: 220, h: 64 };
 
@@ -75,4 +75,18 @@ test("a pushed node pushes what it lands on the same way", () => {
   // The pushed node now ends at 632, so the one under it goes to 632 + 32.
   expect(offsets.get("under it")).toEqual({ x: 0, y: 664 - 560 });
   expect(offsets.has("beside it")).toBe(false);
+});
+
+test("a thing dragged out of the rows leaves no gap behind", () => {
+  const things = [
+    { id: "a", kind: "note", title: "a", w: 280, h: 160 },
+    { id: "b", kind: "note", title: "b", w: 280, h: 160 },
+    { id: "c", kind: "note", title: "c", w: 280, h: 160 },
+  ];
+  const staying = things.filter((thing) => thing.id !== "b");
+  const spots = unfoldLayout(folder, staying);
+  expect(spots.get("c")).toEqual({ x: 268 + 280 + 16, y: 100 });
+  // The rows' box holds only what has a spot, so it shrinks with them.
+  expect(rowsBox(spots, things)).toEqual({ x: 268, y: 100, w: 280 + 16 + 280, h: 160 });
+  expect(rowsBox(new Map(), things)).toBeNull();
 });
