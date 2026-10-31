@@ -10,7 +10,7 @@
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
   import { flatPoints, pointsOf } from "../../lib/canvas/strokes.ts";
   import { cubicBezier, glide, tween } from "../../lib/canvas/motion.ts";
-  import { bounds, onTheWay, stagger, unfoldLayout } from "../../lib/canvas/unfold.ts";
+  import { bounds, onTheWay, pushAside, stagger, unfoldLayout } from "../../lib/canvas/unfold.ts";
   import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type DrawTool, type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
@@ -160,7 +160,8 @@
   }
 
   // The canvas's own nodes where they are, then the unfolded folder's on their way from under it
-  // to their rows beside it, one after the other in the rows' order.
+  // to their rows beside it, one after the other in the rows' order. Own nodes in the rows' way
+  // move aside while the folder is open; only a drag saves where they were pushed to.
   const nodes = $derived.by<Placed[]>(() => {
     const all = data?.nodes ?? [];
     const own = all
@@ -180,7 +181,16 @@
       const at = onTheWay(folderNode, spot, n.width, n.height, t);
       return { id: n.id, x: at.x, y: at.y, w: n.width, h: n.height, raw: n, opacity: t };
     });
-    return [...own, ...laid];
+    const rows = bounds(inner.map((n) => ({ ...(spots.get(n.id) ?? n), w: n.width, h: n.height })));
+    if (!rows) return [...own, ...laid];
+    const offsets = pushAside(rows, own.filter((n) => n.id !== unfolded));
+    const t = easeOut(spread);
+    const pushed = own.map((n) => {
+      const offset = offsets.get(n.id);
+      if (!offset) return n;
+      return { ...n, x: n.x + offset.x * t, y: n.y + offset.y * t };
+    });
+    return [...pushed, ...laid];
   });
   const boardNode = $derived(nodes.find((n) => n.raw.item?.kind === "board"));
   const arrows = $derived(

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bounds, onTheWay, stagger, unfoldLayout } from "./unfold.ts";
+import { bounds, onTheWay, pushAside, stagger, unfoldLayout } from "./unfold.ts";
 
 const folder = { x: 0, y: 100, w: 220, h: 64 };
 
@@ -44,4 +44,35 @@ test("on the way, a thing starts centred under the folder and ends at its spot",
 test("the bounds hold every box", () => {
   expect(bounds([])).toBeNull();
   expect(bounds([{ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: -5, w: 10, h: 10 }])).toEqual({ x: 0, y: -5, w: 30, h: 15 });
+});
+
+const area = { x: 300, y: 100, w: 600, h: 400 };
+
+test("nodes clear of the contents stay where they are", () => {
+  const offsets = pushAside(area, [
+    { id: "left", x: 0, y: 100, w: 200, h: 100 },
+    { id: "below", x: 300, y: 600, w: 200, h: 100 },
+  ]);
+  expect(offsets.size).toBe(0);
+});
+
+test("a node in the way leaves by the shorter way, right or down", () => {
+  const offsets = pushAside(area, [
+    { id: "near the right edge", x: 800, y: 200, w: 200, h: 100 },
+    { id: "near the bottom", x: 400, y: 450, w: 200, h: 100 },
+  ]);
+  expect(offsets.get("near the right edge")).toEqual({ x: 900 + 32 - 800, y: 0 });
+  expect(offsets.get("near the bottom")).toEqual({ x: 0, y: 500 + 32 - 450 });
+});
+
+test("a pushed node pushes what it lands on the same way", () => {
+  const offsets = pushAside(area, [
+    { id: "pushed", x: 400, y: 450, w: 200, h: 100 },
+    { id: "under it", x: 400, y: 560, w: 200, h: 100 },
+    { id: "beside it", x: 1200, y: 450, w: 200, h: 100 },
+  ]);
+  expect(offsets.get("pushed")).toEqual({ x: 0, y: 82 });
+  // The pushed node now ends at 632, so the one under it goes to 632 + 32.
+  expect(offsets.get("under it")).toEqual({ x: 0, y: 664 - 560 });
+  expect(offsets.has("beside it")).toBe(false);
 });
