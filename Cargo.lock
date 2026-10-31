@@ -5795,6 +5795,7 @@ dependencies = [
  "gpui",
  "image",
  "libc",
+ "lyon",
  "notify",
  "polling",
  "rquickjs",

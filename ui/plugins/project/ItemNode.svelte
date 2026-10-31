@@ -1,7 +1,8 @@
 <script lang="ts">
   // Everything on a project canvas that isn't the board: a note (a card), an image, a file (a PDF
   // or video with its poster), a web link, an issue placed off the board, a local board, a folder.
-  // Drawn at `zoom`.
+  // Lengths are in world units and the canvas layer's zoom scales them; `zoom` picks the level
+  // of detail.
   import { Icon, Image, Text, View } from "@neoworks/svelte-gpui/ui";
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
@@ -28,11 +29,10 @@
   }: { item: Item; zoom: number; selected: boolean; width: number; height: number; open?: boolean; target?: boolean } =
     $props();
 
-  const s = (n: number) => n * zoom;
   const excerpt = $derived(item.kind === "note" ? plainText(item.excerpt, 240) : "");
   const frame = $derived({
     flex: 1,
-    radius: s(10),
+    radius: 10,
     background: c.surface,
     borderWidth: 1,
     shadow: selected ? ring : null,
@@ -47,19 +47,19 @@
     <IssueCard card={item.card} {zoom} {selected} fill showRepo />
   </View>
 {:else if item.kind === "note"}
-  <View style={{ ...frame, padding: s(14), gap: s(8) }} hover={{ borderColor: selected ? c.accent : c.borderStrong }}>
+  <View style={{ ...frame, padding: 14, gap: 8 }} hover={{ borderColor: selected ? c.accent : c.borderStrong }}>
     {#if zoom >= 0.45}
-      <View style={{ direction: "row", align: "center", gap: s(6) }}>
-        <Icon svg={fileText} size={s(13)} color={c.faint} />
-        <Text style={{ fontSize: s(11), color: c.faint }}>Note</Text>
+      <View style={{ direction: "row", align: "center", gap: 6 }}>
+        <Icon svg={fileText} size={13} color={c.faint} />
+        <Text style={{ fontSize: 11, color: c.faint }}>Note</Text>
       </View>
     {/if}
-    <Text style={{ fontSize: s(zoom < 0.45 ? 26 : 16), lineHeight: s(zoom < 0.45 ? 30 : 21), color: c.text, maxLines: 2 }}>{item.title}</Text>
+    <Text style={{ fontSize: zoom < 0.45 ? 26 : 16, lineHeight: zoom < 0.45 ? 30 : 21, color: c.text, maxLines: 2 }}>{item.title}</Text>
     {#if zoom >= 0.45}
       {#if excerpt}
-        <Text style={{ fontSize: s(12.5), color: c.muted, lineHeight: s(18) }}>{excerpt}</Text>
+        <Text style={{ fontSize: 12.5, color: c.muted, lineHeight: 18 }}>{excerpt}</Text>
       {:else}
-        <Text style={{ fontSize: s(12.5), color: c.faint, lineHeight: s(18) }}>Empty. Double-click to write.</Text>
+        <Text style={{ fontSize: 12.5, color: c.faint, lineHeight: 18 }}>Empty. Double-click to write.</Text>
       {/if}
     {/if}
   </View>
@@ -67,22 +67,22 @@
   <View style={{ ...frame, background: c.bg }}>
     <Image src={item.path} fit="contain" style={{ flex: 1 }} />
     {#if zoom >= 0.5}
-      <Text style={{ fontSize: s(11), color: c.muted, padding: [s(4), s(8)], truncate: true }}>{item.title}</Text>
+      <Text style={{ fontSize: 11, color: c.muted, padding: [4, 8], truncate: true }}>{item.title}</Text>
     {/if}
   </View>
 {:else if item.kind === "file" && item.media?.poster}
   {@const media = item.media}
   {@const pdf = item.mime === "application/pdf"}
   {@const fitted = contain(width, height, media.posterAspect ?? (pdf ? 0.707 : 16 / 9))}
-  {@const corner = pdf ? s(3) : s(8)}
+  {@const corner = pdf ? 3 : 8}
   {@const badge = pdf && media.pages !== null ? pages(media.pages) : media.duration !== null ? duration(media.duration) : null}
   <!-- The page or the frame itself, at its own proportions inside the node, and nothing around
        it. GPUI rounds an image as drawn, so the image fills a box of exactly its shape. -->
   <View style={{ flex: 1, align: "center", justify: "center" }}>
     <View
       style={{
-        width: s(fitted.w),
-        height: s(fitted.h),
+        width: fitted.w,
+        height: fitted.h,
         radius: corner,
         borderWidth: 1,
         borderColor: selected ? c.accent : c.border,
@@ -94,13 +94,13 @@
     >
       <Image src={item.media.poster} fit="fill" style={{ position: "absolute", inset: 0, radius: corner - 1 }} />
       {#if !pdf}
-        <View style={{ size: s(40), radius: s(20), background: "#000000a0", align: "center", justify: "center" }}>
-          <Icon svg={play} size={s(18)} color="#fff" />
+        <View style={{ size: 40, radius: 20, background: "#000000a0", align: "center", justify: "center" }}>
+          <Icon svg={play} size={18} color="#fff" />
         </View>
       {/if}
       {#if badge && zoom >= 0.45}
         <Text
-          style={{ position: "absolute", right: s(8), bottom: s(8), fontSize: s(10.5), color: "#fff", background: "#000000a0", radius: s(4), paddingX: s(5), paddingY: s(2) }}
+          style={{ position: "absolute", right: 8, bottom: 8, fontSize: 10.5, color: "#fff", background: "#000000a0", radius: 4, paddingX: 5, paddingY: 2 }}
         >
           {badge}
         </Text>
@@ -108,11 +108,11 @@
     </View>
   </View>
 {:else if item.kind === "file"}
-  <View style={{ ...frame, direction: "row", align: "center", gap: s(10), padding: s(12) }}>
-    <Image src={fileIcon(item.title)} style={{ size: s(30), shrink: 0 }} />
+  <View style={{ ...frame, direction: "row", align: "center", gap: 10, padding: 12 }}>
+    <Image src={fileIcon(item.title)} style={{ size: 30, shrink: 0 }} />
     <View style={{ flex: 1, minWidth: 0 }}>
-      <Text style={{ fontSize: s(13), truncate: true }}>{item.title}</Text>
-      <Text style={{ fontSize: s(10), color: c.faint, truncate: true }}>{item.path}</Text>
+      <Text style={{ fontSize: 13, truncate: true }}>{item.title}</Text>
+      <Text style={{ fontSize: 10, color: c.faint, truncate: true }}>{item.path}</Text>
     </View>
   </View>
 {:else if item.kind === "link"}
@@ -129,23 +129,23 @@
           width: "full",
           aspectRatio: item.preview.imageAspect ?? 1.91,
           shrink: 0,
-          radius: [s(10) - 1, s(10) - 1, 0, 0],
+          radius: [10 - 1, 10 - 1, 0, 0],
         }}
       />
     {/if}
-    <View style={{ padding: s(12), gap: s(4), justify: item.preview?.image ? "start" : "center", flex: 1 }}>
-      <View style={{ direction: "row", align: "center", gap: s(6) }}>
+    <View style={{ padding: 12, gap: 4, justify: item.preview?.image ? "start" : "center", flex: 1 }}>
+      <View style={{ direction: "row", align: "center", gap: 6 }}>
         {#if item.preview?.favicon}
-          <Image src={item.preview.favicon} fit="contain" style={{ width: s(12), height: s(12) }} />
+          <Image src={item.preview.favicon} fit="contain" style={{ width: 12, height: 12 }} />
         {/if}
-        <Text style={{ fontSize: s(10), color: c.accent, uppercase: true, truncate: true }}>
+        <Text style={{ fontSize: 10, color: c.accent, uppercase: true, truncate: true }}>
           {item.preview?.site ?? item.host}
         </Text>
       </View>
       <!-- Titles and descriptions often hold a URL or a repository path longer than the card. -->
-      <Text style={{ fontSize: s(13), maxLines: 2, overflowWrap: "anywhere" }}>{item.preview?.title ?? item.title}</Text>
+      <Text style={{ fontSize: 13, maxLines: 2, overflowWrap: "anywhere" }}>{item.preview?.title ?? item.title}</Text>
       {#if item.preview?.description && zoom >= 0.45}
-        <Text style={{ fontSize: s(11.5), color: c.muted, lineHeight: s(16), maxLines: 2, overflowWrap: "anywhere" }}>
+        <Text style={{ fontSize: 11.5, color: c.muted, lineHeight: 16, maxLines: 2, overflowWrap: "anywhere" }}>
           {item.preview.description}
         </Text>
       {/if}
@@ -156,16 +156,16 @@
 {:else if item.kind === "localboard"}
   <LocalBoard {item} {zoom} {selected} />
 {:else if item.kind === "text"}
-  <View style={{ ...frame, padding: s(12), background: c.raised }}>
-    <Text style={{ fontSize: s(13), lineHeight: s(18) }}>{item.text ?? ""}</Text>
+  <View style={{ ...frame, padding: 12, background: c.raised }}>
+    <Text style={{ fontSize: 13, lineHeight: 18 }}>{item.text ?? ""}</Text>
   </View>
 {:else if item.kind === "group"}
-  <View style={{ flex: 1, radius: s(14), borderWidth: 1, borderColor: c.borderStrong, padding: s(10) }}>
-    <Text style={{ fontSize: s(12), color: c.muted }}>{item.title ?? ""}</Text>
+  <View style={{ flex: 1, radius: 14, borderWidth: 1, borderColor: c.borderStrong, padding: 10 }}>
+    <Text style={{ fontSize: 12, color: c.muted }}>{item.title ?? ""}</Text>
   </View>
 {:else}
-  <View style={{ ...frame, padding: s(12), borderColor: c.danger, justify: "center" }}>
-    <Text style={{ fontSize: s(12), color: c.muted }}>{item.kind === "missing" ? item.title : "?"}</Text>
-    {#if item.uri}<Text style={{ fontSize: s(10), color: c.faint, truncate: true }}>{item.uri}</Text>{/if}
+  <View style={{ ...frame, padding: 12, borderColor: c.danger, justify: "center" }}>
+    <Text style={{ fontSize: 12, color: c.muted }}>{item.kind === "missing" ? item.title : "?"}</Text>
+    {#if item.uri}<Text style={{ fontSize: 10, color: c.faint, truncate: true }}>{item.uri}</Text>{/if}
   </View>
 {/if}

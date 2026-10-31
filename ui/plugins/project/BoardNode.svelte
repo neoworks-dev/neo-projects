@@ -28,7 +28,6 @@
 
   let { board, project, zoom, placed }: Props = $props();
 
-  const s = (n: number) => n * zoom;
   let adding = $state<string | null>(null);
   let title = $state("");
 
@@ -55,54 +54,54 @@
 <View
   style={{
     flex: 1,
-    radius: s(12),
+    radius: 12,
     background: c.surface,
     borderWidth: 1,
     borderColor: c.border,
     overflow: "hidden",
   }}
 >
-  <View style={{ direction: "row", align: "center", gap: s(8), height: s(40), paddingX: s(14), cursor: "grab" }}>
-    <Text style={{ fontSize: s(13), fontWeight: "semibold" }}>{project.local ? "Issues" : "Board"}</Text>
-    <Text style={{ fontSize: s(12), color: c.faint }}>{project.repo ?? `${project.folder}/Issues`}</Text>
+  <View style={{ direction: "row", align: "center", gap: 8, height: 40, paddingX: 14, cursor: "grab" }}>
+    <Text style={{ fontSize: 13, fontWeight: "semibold" }}>{project.local ? "Issues" : "Board"}</Text>
+    <Text style={{ fontSize: 12, color: c.faint }}>{project.repo ?? `${project.folder}/Issues`}</Text>
     {#if !board.statusField && board.columns.length > 0}
-      <Text style={{ fontSize: s(11), color: c.faint }}>· no Status field, so Open and Closed</Text>
+      <Text style={{ fontSize: 11, color: c.faint }}>· no Status field, so Open and Closed</Text>
     {/if}
   </View>
   {#if board.columns.length === 0}
     <View style={{ flex: 1, align: "center", justify: "center" }}>
-      <Text style={{ fontSize: s(13), color: c.muted }}>Waiting for the first sync…</Text>
+      <Text style={{ fontSize: 13, color: c.muted }}>Waiting for the first sync…</Text>
     </View>
   {/if}
-  <View style={{ flex: 1, direction: "row", gap: s(10), padding: [0, s(10), s(10), s(10)], minHeight: 0 }}>
+  <View style={{ flex: 1, direction: "row", gap: 10, padding: [0, 10, 10, 10], minHeight: 0 }}>
     {#each board.columns as column (column.key)}
       <DropTarget
         accept={(data) => isCard(data) && !column.cards.some((card) => card.node === data.card.node)}
         ondrop={({ data }) => {
           if (isCard(data)) void app.run(() => app.api.moveCard(data.card.node, column.key));
         }}
-        style={{ flex: 1, minWidth: 0, radius: s(10), background: c.bg, padding: s(6), gap: s(6), borderWidth: 1, borderColor: "transparent", transition: 140 }}
+        style={{ flex: 1, minWidth: 0, radius: 10, background: c.bg, padding: 6, gap: 6, borderWidth: 1, borderColor: "transparent", transition: 140 }}
         over={{ background: c.accentSoft, borderColor: c.accent }}
       >
-        <View style={{ direction: "row", align: "center", gap: s(6), paddingX: s(4), height: s(26) }}>
+        <View style={{ direction: "row", align: "center", gap: 6, paddingX: 4, height: 26 }}>
           {@const head = stateIcon({ state: column.done || column.key === "closed" ? "CLOSED" : "OPEN", stateReason: null, fields: { Status: column.name } })}
-          <Icon svg={head.icon} size={s(14)} color={column.key === "none" ? c.faint : head.color} />
-          <Text style={{ fontSize: s(12), fontWeight: "semibold", nowrap: true }}>{column.name}</Text>
-          <Text style={{ fontSize: s(11), color: c.faint }}>{column.cards.length}</Text>
+          <Icon svg={head.icon} size={14} color={column.key === "none" ? c.faint : head.color} />
+          <Text style={{ fontSize: 12, fontWeight: "semibold", nowrap: true }}>{column.name}</Text>
+          <Text style={{ fontSize: 11, color: c.faint }}>{column.cards.length}</Text>
           {#if placed[column.key]}
-            <Text style={{ fontSize: s(10), color: c.faint }}>+{placed[column.key]} on canvas</Text>
+            <Text style={{ fontSize: 10, color: c.faint }}>+{placed[column.key]} on canvas</Text>
           {/if}
           <View style={{ flex: 1 }} />
           {#if project.repoId || project.local}
             <Button
-              style={{ size: s(24), radius: s(6), align: "center", justify: "center", color: c.muted, transition: 120 }}
+              style={{ size: 24, radius: 6, align: "center", justify: "center", color: c.muted, transition: 120 }}
               hover={{ background: c.hover, color: c.text }}
               onpress={() => {
                 adding = column.key;
                 title = "";
               }}
             >
-              <Icon svg={icons.add} size={s(14)} />
+              <Icon svg={icons.add} size={14} />
             </Button>
           {/if}
         </View>
@@ -111,13 +110,13 @@
             bind:value={title}
             placeholder="Issue title, Enter to create"
             style={{
-              paddingX: s(8),
-              paddingY: s(6),
-              radius: s(6),
+              paddingX: 8,
+              paddingY: 6,
+              radius: 6,
               background: c.raised,
               borderWidth: 1,
               borderColor: c.accent,
-              fontSize: s(13),
+              fontSize: 13,
               color: c.text,
             }}
             onsubmit={() => void create(column.key)}
@@ -127,7 +126,7 @@
           />
         {/if}
         <Scroll style={{ flex: 1 }}>
-          <View style={{ gap: s(6) }}>
+          <View style={{ gap: 6 }}>
             {#each column.cards as card (card.node)}
               <Draggable data={{ kind: "card", card }}>
                 <View onpress={() => app.select({ kind: "issue", node: card.node })}>
