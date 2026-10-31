@@ -10,7 +10,6 @@
   type LocalBoardItem = Extract<Item, { kind: "localboard" }>;
   let { item, zoom, selected }: { item: LocalBoardItem; zoom: number; selected: boolean } = $props();
 
-  const s = (n: number) => n * zoom;
   let adding = $state<string | null>(null);
   let title = $state("");
   const folder = $derived(item.path.split("/").slice(0, -1).join("/"));
@@ -41,7 +40,7 @@
 <View
   style={{
     flex: 1,
-    radius: s(12),
+    radius: 12,
     background: c.surface,
     borderWidth: 1,
     shadow: selected ? ring : null,
@@ -49,37 +48,37 @@
     overflow: "hidden",
   }}
 >
-  <View style={{ direction: "row", align: "center", gap: s(8), height: s(38), paddingX: s(14), cursor: "grab" }}>
-    <Text style={{ fontSize: s(13), fontWeight: "semibold" }}>{item.title}</Text>
-    <Text style={{ fontSize: s(11), color: c.faint }}>notes by {item.groupBy}</Text>
+  <View style={{ direction: "row", align: "center", gap: 8, height: 38, paddingX: 14, cursor: "grab" }}>
+    <Text style={{ fontSize: 13, fontWeight: "semibold" }}>{item.title}</Text>
+    <Text style={{ fontSize: 11, color: c.faint }}>notes by {item.groupBy}</Text>
   </View>
-  <View style={{ flex: 1, direction: "row", gap: s(8), padding: [0, s(8), s(8), s(8)], minHeight: 0 }}>
+  <View style={{ flex: 1, direction: "row", gap: 8, padding: [0, 8, 8, 8], minHeight: 0 }}>
     {#each item.columns as column (column.value ?? "other")}
       <DropTarget
         accept={(data) => isNote(data) && data.board === item.path && !column.notes.some((n) => n.path === data.path)}
         ondrop={({ data }) => {
           if (isNote(data)) void app.run(() => app.api.boardMove(item.path, data.path, column.value));
         }}
-        style={{ flex: 1, minWidth: 0, radius: s(8), background: c.bg, padding: s(6), gap: s(6) }}
+        style={{ flex: 1, minWidth: 0, radius: 8, background: c.bg, padding: 6, gap: 6 }}
         over={{ background: c.accentSoft }}
       >
-        <View style={{ direction: "row", align: "center", gap: s(6), paddingX: s(4), height: s(24) }}>
-          <Text style={{ fontSize: s(12), fontWeight: "semibold", nowrap: true }}>{column.label}</Text>
-          <Text style={{ fontSize: s(11), color: c.faint }}>{column.notes.length}</Text>
+        <View style={{ direction: "row", align: "center", gap: 6, paddingX: 4, height: 24 }}>
+          <Text style={{ fontSize: 12, fontWeight: "semibold", nowrap: true }}>{column.label}</Text>
+          <Text style={{ fontSize: 11, color: c.faint }}>{column.notes.length}</Text>
           <View style={{ flex: 1 }} />
           <Button
-            style={{ size: s(24), radius: s(6), align: "center", justify: "center", color: c.muted, transition: 120 }}
+            style={{ size: 24, radius: 6, align: "center", justify: "center", color: c.muted, transition: 120 }}
             hover={{ background: c.hover, color: c.text }}
             onpress={() => (adding = column.value ?? "")}
           >
-            <Icon svg={icons.add} size={s(14)} />
+            <Icon svg={icons.add} size={14} />
           </Button>
         </View>
         {#if adding === (column.value ?? "")}
           <Input
             bind:value={title}
             placeholder="Note title, Enter to create"
-            style={{ paddingX: s(8), paddingY: s(6), radius: s(6), background: c.raised, borderWidth: 1, borderColor: c.accent, fontSize: s(13), color: c.text }}
+            style={{ paddingX: 8, paddingY: 6, radius: 6, background: c.raised, borderWidth: 1, borderColor: c.accent, fontSize: 13, color: c.text }}
             onsubmit={() => void create(column.value)}
             oncommit={() => {
               if (!title.trim()) adding = null;
@@ -87,17 +86,17 @@
           />
         {/if}
         <Scroll style={{ flex: 1 }}>
-          <View style={{ gap: s(6) }}>
+          <View style={{ gap: 6 }}>
             {#each column.notes as note (note.path)}
               <Draggable data={{ kind: "note", board: item.path, path: note.path }}>
                 <View
-                  style={{ padding: s(8), gap: s(4), radius: s(6), background: c.raised, borderWidth: 1, borderColor: c.border }}
+                  style={{ padding: 8, gap: 4, radius: 6, background: c.raised, borderWidth: 1, borderColor: c.border }}
                   hover={{ borderColor: c.borderStrong }}
                   onpress={() => app.select({ kind: "note", path: note.path })}
                 >
-                  <Text style={{ fontSize: s(13), maxLines: 2 }}>{note.title}</Text>
+                  <Text style={{ fontSize: 13, maxLines: 2 }}>{note.title}</Text>
                   {#if note.excerpt && zoom >= 0.6}
-                    <Text style={{ fontSize: s(11), color: c.muted, maxLines: 2 }}>{note.excerpt}</Text>
+                    <Text style={{ fontSize: 11, color: c.muted, maxLines: 2 }}>{note.excerpt}</Text>
                   {/if}
                 </View>
               </Draggable>

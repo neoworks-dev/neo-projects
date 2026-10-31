@@ -1,7 +1,6 @@
 <script lang="ts">
-  // One arrow, on a canvas of its own just big enough to hold it. The host draws a canvas on the
-  // CPU and uploads it whole when it changes, so one small canvas per arrow keeps a drag cheap
-  // where one window-sized canvas for all of them was redrawn and uploaded on every pointer move.
+  // One line, on a vector canvas of its own just big enough to hold it. The host keeps its lines
+  // and paints them as GPU paths each frame, so redrawing it as a node is dragged uploads nothing.
   import { Canvas } from "@neoworks/svelte-gpui/ui";
   import { arrowHead, type Point } from "./geometry.ts";
 
@@ -9,20 +8,19 @@
     /** The points to draw through, in the coordinates of the layer it sits in. */
     points: Point[];
     color: string;
+    /** In the layer's units, like `head`. */
     width?: number;
-    head?: boolean;
+    /** How long the arrow head's sides are; none when 0. */
+    head?: number;
   }
 
-  let { points, color, width = 1.75, head = true }: Props = $props();
+  let { points, color, width = 1.75, head = 0 }: Props = $props();
 
-  const pad = 12;
-  // The canvas grows in steps, so a drag redraws it in place instead of resizing it each frame:
-  // a canvas keeps its pixels when resized, so what was drawn before the resize would be clipped.
-  const step = 96;
+  const pad = $derived(head + width);
   const left = $derived(Math.min(...points.map((p) => p.x)) - pad);
   const top = $derived(Math.min(...points.map((p) => p.y)) - pad);
-  const w = $derived(Math.ceil((Math.max(...points.map((p) => p.x)) - left + pad) / step) * step);
-  const h = $derived(Math.ceil((Math.max(...points.map((p) => p.y)) - top + pad) / step) * step);
+  const w = $derived(Math.max(...points.map((p) => p.x)) - left + pad);
+  const h = $derived(Math.max(...points.map((p) => p.y)) - top + pad);
 
   let ink = $state<Canvas>();
 
@@ -38,12 +36,10 @@
     // the side it arrives at.
     const tip = local[local.length - 1];
     const before = local[Math.max(0, local.length - 3)];
-    const [l, r] = arrowHead(before, tip, 9);
+    const [l, r] = arrowHead(before, tip, head);
     ink.line(tip.x, tip.y, l.x, l.y, { color, width });
     ink.line(tip.x, tip.y, r.x, r.y, { color, width });
   });
 </script>
 
-{#key `${w}x${h}`}
-  <Canvas bind:this={ink} style={{ position: "absolute", left, top, width: w, height: h }} />
-{/key}
+<Canvas bind:this={ink} vector style={{ position: "absolute", left, top, width: w, height: h }} />

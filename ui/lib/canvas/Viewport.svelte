@@ -82,6 +82,7 @@
     type Rect,
     type Side,
   } from "./geometry.ts";
+  import AtScreenSize from "./AtScreenSize.svelte";
   import GuideLine from "./GuideLine.svelte";
   import Ink from "./Ink.svelte";
   import { snap, type Guide } from "./snap.ts";
@@ -94,7 +95,10 @@
     view: ViewState;
     selected?: string[];
     selectedArrow?: string | null;
-    /** Draws a node's content, at `zoom`; it is laid out in a box of the node's size times zoom. */
+    /**
+     * Draws a node's content in a box of the node's size, in world units; the layer's zoom scales
+     * it. `zoom` is for choosing how much detail to show.
+     */
     node: Snippet<[N, number]>;
     /** Whether a node can be moved by dragging it. */
     movable?: (node: N) => boolean;
@@ -210,13 +214,16 @@
   const NEAR = 20;
   /** How far the dot slides out past the node's edge, in screen pixels. */
   const DOT_OUT = 16;
-  /** The node the pointer is near and the side it is nearest, where the arrow dot is out. */
+  /**
+   * The node the pointer is near and the side it is nearest. The arrow dot is out on that side,
+   * and the node has its resize handles.
+   */
   let nearby = $state<{ id: string; side: Side } | null>(null);
   /** The pointer is on the dot's grab area, so a press there starts an arrow. */
   let dotHot = $state(false);
 
   function track(e: PointerEvent) {
-    if (!linkable || link || tool) return;
+    if (link || tool) return;
     const at = toWorld(local(e));
     const found = near(shown, at, NEAR / zoom);
     if (!found) {
@@ -241,9 +248,10 @@
   });
   const toWorld = (p: Point): Point => ({ x: p.x / zoom + view.x, y: p.y / zoom + view.y });
 
-  // Nodes sit in one layer at world position times zoom, and panning only moves that layer, so a
-  // pan changes one style however many nodes there are.
-  const shift = $derived<[number, number]>([-view.x * zoom, -view.y * zoom]);
+  // Nodes sit in one layer in world units, which the host scales by the layer's zoom, and panning
+  // only moves that layer, so a pan or a zoom step changes one style however many nodes there
+  // are. The shift is in world units too, since the layer's zoom scales its own lengths.
+  const shift = $derived<[number, number]>([-view.x, -view.y]);
 
   /** A node being resized by one of its handles: its box when it started, and as it is now. */
   let resize = $state<{ id: string; handle: Handle; start: Rect; from: Point; rect: Rect } | null>(null);
@@ -283,19 +291,18 @@
   // are the same, and every arrow's canvas would draw again.
   let paths = new Map<string, { key: string; arrow: A; points: Point[]; mid: Point }>();
 
-  /** Arrows in layer coordinates (world times zoom), with their midpoints for labels. */
+  /** Arrows through world points, with their midpoints for labels. */
   const lines = $derived.by(() => {
     const next = new Map<string, { key: string; arrow: A; points: Point[]; mid: Point }>();
     for (const a of arrows) {
       const from = byId.get(a.from);
       const to = byId.get(a.to);
       if (!from || !to) continue;
-      const key = `${from.x},${from.y},${from.w},${from.h},${to.x},${to.y},${to.w},${to.h},${zoom}`;
+      const key = `${from.x},${from.y},${from.w},${from.h},${to.x},${to.y},${to.w},${to.h}`;
       let line = paths.get(a.id);
       if (line?.key !== key || line.arrow !== a) {
-        const world = arrowPath(from, to);
-        if (!world) continue;
-        const points = world.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
+        const points = arrowPath(from, to);
+        if (!points) continue;
         line = { key, arrow: a, points, mid: midpoint(points) };
       }
       next.set(a.id, line);
@@ -304,28 +311,24 @@
     return [...next.values()];
   });
 
-  /** The arrows being drawn, one from each node they start at, in layer coordinates. */
+  /** The arrows being drawn, one from each node they start at, through world points. */
   const linkLines = $derived.by(() => {
     if (!link) return [];
     const at = toWorld(link.to);
     return link.from.flatMap((id) => {
       const from = byId.get(id);
       if (!from) return [];
-      const world = arrowPath(from, { x: at.x, y: at.y, w: 0, h: 0 });
-      if (!world) return [];
-      return [{ id, points: world.map((p) => ({ x: p.x * zoom, y: p.y * zoom })) }];
+      const points = arrowPath(from, { x: at.x, y: at.y, w: 0, h: 0 });
+      if (!points) return [];
+      return [{ id, points }];
     });
   });
 
   /** The selection box, in viewport coordinates. */
   const lassoBox = $derived(lasso ? spanned(lasso.from, lasso.to) : null);
 
-  const toLayer = (points: Point[]) => points.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
-
-  /** The strokes on the background, without those the eraser is taking, in layer coordinates. */
-  const inked = $derived(
-    strokes.filter((s) => !erasing?.includes(s.id)).map((s) => ({ ...s, points: toLayer(s.points) })),
-  );
+  /** The strokes on the background, without those the eraser is taking. */
+  const inked = $derived(strokes.filter((s) => !erasing?.includes(s.id)));
 
   // Pointer moves come faster than frames (a 1000 Hz mouse sends sixteen a frame); only the last
   // one before each frame is applied.
@@ -645,53 +648,56 @@
       onwheel={wheel}
     />
   </DropTarget>
-  <View style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, translate: shift }}>
+  <View style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, translate: shift, zoom }}>
     {#each inked as stroke (stroke.id)}
-      <Ink points={stroke.points} color={stroke.color} width={stroke.width * zoom} head={false} />
+      <Ink points={stroke.points} color={stroke.color} width={stroke.width} />
     {/each}
     {#if drawing && drawing.length > 1}
-      <Ink points={toLayer(drawing)} color={pen.color} width={pen.width * zoom} head={false} />
+      <Ink points={drawing} color={pen.color} width={pen.width} />
     {/if}
+    <!-- Arrows keep their width and head size on screen at any zoom. -->
     {#each lines as { arrow, points } (arrow.id)}
       {@const chosen = arrow.id === selectedArrow}
-      <Ink {points} color={chosen ? c.accent : (arrow.color ?? c.borderStrong)} width={chosen ? 2.5 : 1.75} />
+      <Ink {points} color={chosen ? c.accent : (arrow.color ?? c.borderStrong)} width={(chosen ? 2.5 : 1.75) / zoom} head={9 / zoom} />
     {/each}
     {#each linkLines as line (line.id)}
-      <Ink points={line.points} color={c.accent} width={2} head={false} />
+      <Ink points={line.points} color={c.accent} width={2 / zoom} />
     {/each}
     {#each lines as { arrow, mid } (arrow.id)}
       {@const chosen = arrow.id === selectedArrow}
-      <View
-        style={{
-          position: "absolute",
-          left: mid.x - (arrow.label ? arrow.label.length * 3.1 + 7 : 5),
-          top: mid.y - (arrow.label ? 10 : 5),
-          direction: "row",
-        }}
-        onpress={() => onselectarrow?.(chosen ? null : arrow.id)}
-      >
-        {#if arrow.label}
-          <View
-            style={{
-              paddingX: 6,
-              height: 20,
-              justify: "center",
-              radius: 10,
-              background: chosen ? c.accent : c.raised,
-              borderWidth: 1,
-              borderColor: chosen ? c.accent : c.border,
-              transition: 120,
-            }}
-          >
-            <Text style={{ fontSize: 11, color: chosen ? c.onAccent : c.muted, nowrap: true }}>{arrow.label}</Text>
-          </View>
-        {:else}
-          <View
-            style={{ width: 10, height: 10, radius: 5, background: chosen ? c.accent : c.raised, borderWidth: 1, borderColor: chosen ? c.accent : c.borderStrong }}
-            hover={{ background: c.accent }}
-          />
-        {/if}
-      </View>
+      <AtScreenSize at={mid} {zoom}>
+        <View
+          style={{
+            position: "absolute",
+            left: -(arrow.label ? arrow.label.length * 3.1 + 7 : 5),
+            top: -(arrow.label ? 10 : 5),
+            direction: "row",
+          }}
+          onpress={() => onselectarrow?.(chosen ? null : arrow.id)}
+        >
+          {#if arrow.label}
+            <View
+              style={{
+                paddingX: 6,
+                height: 20,
+                justify: "center",
+                radius: 10,
+                background: chosen ? c.accent : c.raised,
+                borderWidth: 1,
+                borderColor: chosen ? c.accent : c.border,
+                transition: 120,
+              }}
+            >
+              <Text style={{ fontSize: 11, color: chosen ? c.onAccent : c.muted, nowrap: true }}>{arrow.label}</Text>
+            </View>
+          {:else}
+            <View
+              style={{ width: 10, height: 10, radius: 5, background: chosen ? c.accent : c.raised, borderWidth: 1, borderColor: chosen ? c.accent : c.borderStrong }}
+              hover={{ background: c.accent }}
+            />
+          {/if}
+        </View>
+      </AtScreenSize>
     {/each}
     {#each visible as n (n.id)}
       {#if linkable && nearby?.id === n.id && !drag && !resize}
@@ -701,51 +707,55 @@
              dot fills while the pointer is on it. -->
         {#each [nearby.side] as side (side)}
           {@const dot = dotPoint(n, side, zoom, DOT_OUT)}
-          <Presence
-            in={[fly, { ...dot.back, duration: 160 }]}
-            out={[fly, { ...dot.back, duration: 120 }]}
-            style={{ position: "absolute", left: dot.at.x - 11, top: dot.at.y - 11 }}
-          >
-            <View
-              style={{ size: 22, align: "center", justify: "center", cursor: "crosshair" }}
-              onhover={(inside) => (dotHot = inside)}
-              ondown={(e) => linkDown(n, e)}
-              onmove={linkMove}
-              onup={linkUp}
+          <AtScreenSize at={{ x: dot.at.x / zoom, y: dot.at.y / zoom }} {zoom}>
+            <Presence
+              in={[fly, { ...dot.back, duration: 160 }]}
+              out={[fly, { ...dot.back, duration: 120 }]}
+              style={{ position: "absolute", left: -11, top: -11 }}
             >
               <View
-                style={{
-                  size: 11,
-                  radius: 6,
-                  background: dotHot || link ? c.accent : c.surface,
-                  borderWidth: 2,
-                  borderColor: c.accent,
-                  transition: 120,
-                }}
-              />
-            </View>
-          </Presence>
+                style={{ size: 22, align: "center", justify: "center", cursor: "crosshair" }}
+                onhover={(inside) => (dotHot = inside)}
+                ondown={(e) => linkDown(n, e)}
+                onmove={linkMove}
+                onup={linkUp}
+              >
+                <View
+                  style={{
+                    size: 11,
+                    radius: 6,
+                    background: dotHot || link ? c.accent : c.surface,
+                    borderWidth: 2,
+                    borderColor: c.accent,
+                    transition: 120,
+                  }}
+                />
+              </View>
+            </Presence>
+          </AtScreenSize>
         {/each}
       {/if}
       <View
-        style={{ position: "absolute", left: n.x * zoom, top: n.y * zoom, width: n.w * zoom, height: n.h * zoom }}
+        style={{ position: "absolute", left: n.x, top: n.y, width: n.w, height: n.h }}
         ondown={(e) => nodeDown(n, e)}
         onmove={nodeMove}
         onup={nodeUp}
       >
         {@render node(n, zoom)}
       </View>
-      {#if minSize(n)}
-        <!-- Invisible strips on the sides and squares on the corners: dragging there resizes. -->
+      {#if minSize(n) && (nearby?.id === n.id || resize?.id === n.id)}
+        <!-- Invisible strips on the sides and squares on the corners: dragging there resizes. Only
+             the node the pointer is near has them, since their screen size changes with every
+             zoom step. -->
         {#each handles as handle (handle)}
           {@const zone = grabZone(n, handle, zoom)}
           <View
             style={{
               position: "absolute",
-              left: zone.x,
-              top: zone.y,
-              width: zone.w,
-              height: zone.h,
+              left: zone.x / zoom,
+              top: zone.y / zoom,
+              width: zone.w / zoom,
+              height: zone.h / zoom,
               cursor: handle.length === 2 ? "default" : handle === "e" || handle === "w" ? "col-resize" : "row-resize",
             }}
             ondown={(e) => resizeDown(n, handle, e)}

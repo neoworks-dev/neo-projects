@@ -27,7 +27,6 @@
 
   let { text, color, zoom, selected, editing, onchange, ondone }: Props = $props();
 
-  const s = (n: number) => n * zoom;
   const tint = $derived(stickyTint(color));
   let draft = $state("");
   let field = $state<Input>();
@@ -47,12 +46,12 @@
 <View
   style={{
     flex: 1,
-    padding: s(14),
-    radius: s(6),
+    padding: 14,
+    radius: 6,
     background: tint.background,
     borderWidth: 1,
     borderColor: selected ? c.accent : tint.border,
-    shadow: selected ? ring : [{ x: 0, y: s(6), blur: s(16), spread: -s(6), color: "rgba(0, 0, 0, 0.5)" }],
+    shadow: selected ? ring : [{ x: 0, y: 6, blur: 16, spread: -6, color: "rgba(0, 0, 0, 0.5)" }],
     overflow: "hidden",
     transition: 140,
   }}
@@ -64,7 +63,7 @@
       multiline
       rows={3}
       placeholder="Write… Markdown works"
-      style={{ flex: 1, fontFamily: "mono", fontSize: s(13), lineHeight: s(20), color: tint.text, background: "transparent", padding: 0 }}
+      style={{ flex: 1, fontFamily: "mono", fontSize: 13, lineHeight: 20, color: tint.text, background: "transparent", padding: 0 }}
       oncommit={finish}
       onblur={finish}
       onkey={(e) => {
@@ -75,8 +74,8 @@
       }}
     />
   {:else if text.trim()}
-    <Markdown source={text} size={s(14)} interactive={false} />
+    <Markdown source={text} size={14} interactive={false} />
   {:else}
-    <Text style={{ fontSize: s(13), color: tint.text, opacity: 0.55 }}>Double-click to write</Text>
+    <Text style={{ fontSize: 13, color: tint.text, opacity: 0.55 }}>Double-click to write</Text>
   {/if}
 </View>
