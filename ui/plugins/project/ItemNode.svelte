@@ -11,6 +11,7 @@
   import { icons } from "../../lib/icons.ts";
   import { duration, pages } from "../../lib/media.ts";
   import { contain } from "../../lib/canvas/geometry.ts";
+  import { fileIcon } from "../../lib/fileIcons.ts";
   const { fileText, play } = icons;
 
   // `width` and `height` are the node's, in world units.
@@ -98,11 +99,7 @@
   </View>
 {:else if item.kind === "file"}
   <View style={{ ...frame, direction: "row", align: "center", gap: s(10), padding: s(12) }}>
-    <View
-      style={{ width: s(34), height: s(40), radius: s(4), background: c.raised, align: "center", justify: "center" }}
-    >
-      <Text style={{ fontSize: s(9), color: c.muted, uppercase: true }}>{item.title.split(".").pop()}</Text>
-    </View>
+    <Image src={fileIcon(item.title)} style={{ size: s(30), shrink: 0 }} />
     <View style={{ flex: 1, minWidth: 0 }}>
       <Text style={{ fontSize: s(13), truncate: true }}>{item.title}</Text>
       <Text style={{ fontSize: s(10), color: c.faint, truncate: true }}>{item.path}</Text>

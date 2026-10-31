@@ -17,17 +17,8 @@ import circleDashed from "@phosphor-icons/core/regular/circle-dashed.svg";
 import circleHalf from "@phosphor-icons/core/regular/circle-half.svg";
 import circleHalfFill from "@phosphor-icons/core/fill/circle-half-fill.svg";
 import cornersOut from "@phosphor-icons/core/regular/corners-out.svg";
-import file from "@phosphor-icons/core/regular/file.svg";
-import fileAudio from "@phosphor-icons/core/regular/file-audio.svg";
-import fileCode from "@phosphor-icons/core/regular/file-code.svg";
-import fileImage from "@phosphor-icons/core/regular/file-image.svg";
-import fileMd from "@phosphor-icons/core/regular/file-md.svg";
-import filePdf from "@phosphor-icons/core/regular/file-pdf.svg";
 import fileText from "@phosphor-icons/core/regular/file-text.svg";
-import fileVideo from "@phosphor-icons/core/regular/file-video.svg";
-import fileZip from "@phosphor-icons/core/regular/file-zip.svg";
 import folder from "@phosphor-icons/core/regular/folder.svg";
-import folderOpen from "@phosphor-icons/core/regular/folder-open.svg";
 import folderSimple from "@phosphor-icons/core/regular/folder-simple.svg";
 import githubLogo from "@phosphor-icons/core/regular/github-logo.svg";
 import hash from "@phosphor-icons/core/regular/hash.svg";
@@ -99,21 +90,12 @@ export const icons = {
   // Task lists
   taskDone: checkSquareFill,
   taskOpen: square,
-  // Files
+  // Files. Files and folders in a listing take their icons from `fileIcons.ts`.
   folder,
-  folderOpen,
   folderClosed: folderSimple,
-  file,
   fileText,
-  fileMarkdown: fileMd,
-  filePdf,
-  fileImage,
-  fileVideo,
   /** On a video's poster. */
   play: playFill,
-  fileAudio,
-  fileArchive: fileZip,
-  fileCode,
 };
 
 /** The icon and colour for an issue's state: by its Status when open, by why when closed. */
