@@ -8,7 +8,8 @@ use crate::Result;
 const SCHEMA: &str = include_str!("schema.sql");
 const SCHEMA_V2: &str = include_str!("schema_v2.sql");
 const SCHEMA_V3: &str = include_str!("schema_v3.sql");
-const VERSION: i64 = 3;
+const SCHEMA_V4: &str = include_str!("schema_v4.sql");
+const VERSION: i64 = 4;
 
 /// `cache.db`. One per workspace, owned by the window's Rust host.
 pub struct Cache {
@@ -41,7 +42,10 @@ impl Cache {
             if version <= 1 {
                 tx.execute_batch(SCHEMA_V2)?;
             }
-            tx.execute_batch(SCHEMA_V3)?;
+            if version <= 2 {
+                tx.execute_batch(SCHEMA_V3)?;
+            }
+            tx.execute_batch(SCHEMA_V4)?;
             tx.commit()?;
             conn.pragma_update(None, "user_version", VERSION)?;
         } else if version != VERSION {
