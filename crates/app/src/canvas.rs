@@ -392,7 +392,7 @@ fn peek(ws: &Workspace, cache: &Cache, node: &Node) -> Result<Value> {
         _ => it["title"].clone(),
     };
     let image = match it["kind"].as_str() {
-        Some("image") => it["path"].clone(),
+        Some("image") => it["src"].clone(),
         Some("file") => it["media"]["poster"].clone(),
         Some("link") => it["preview"]["image"].clone(),
         _ => Value::Null,
@@ -420,8 +420,8 @@ fn file_item(ws: &Workspace, uri: Option<String>, path: Option<PathBuf>) -> Valu
         let excerpt: String = body.trim().chars().take(400).collect();
         return json!({"kind": "note", "uri": uri, "path": rel(ws, &path), "abs": path, "title": title, "excerpt": excerpt});
     }
-    if mime.starts_with("image/") {
-        return json!({"kind": "image", "uri": uri, "path": path, "title": title, "aspect": aspect(&path)});
+    if let Some(src) = picture_of(ws, &path, mime) {
+        return json!({"kind": "image", "uri": uri, "path": path, "src": src, "title": title, "aspect": aspect(&src)});
     }
     let name = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let mut file = json!({"kind": "file", "uri": uri, "path": path, "title": name, "mime": mime});
@@ -429,6 +429,19 @@ fn file_item(ws: &Workspace, uri: Option<String>, path: Option<PathBuf>) -> Valu
         file["media"] = media_json(ws, made);
     }
     file
+}
+
+/// The picture the window draws for an image: the file itself, or the PNG poster of a type it
+/// can't decode. Until that poster is made, or when it couldn't be, the image is a file card.
+fn picture_of(ws: &Workspace, path: &Path, mime: &str) -> Option<PathBuf> {
+    if !mime.starts_with("image/") {
+        return None;
+    }
+    if media::kind(path) != Some(media::Kind::Image) {
+        return Some(path.to_path_buf());
+    }
+    let poster = media::get(&crate::previews::dir(ws), path)?.poster?;
+    Some(crate::previews::dir(ws).join(poster))
 }
 
 /// A PDF's or video's preview for the window: the poster as an absolute path with its width

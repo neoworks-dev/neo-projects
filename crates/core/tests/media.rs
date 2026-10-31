@@ -29,12 +29,16 @@ fn pdfinfo_and_ffprobe_reports_are_read() {
 }
 
 #[test]
-fn pdfs_and_videos_get_previews_and_nothing_else_does() {
+fn pdfs_videos_and_images_the_window_cant_draw_get_previews() {
     assert_eq!(media::kind(Path::new("a/report.pdf")), Some(Kind::Pdf));
     assert_eq!(media::kind(Path::new("clip.MP4")), Some(Kind::Video));
     assert_eq!(media::kind(Path::new("clip.webm")), Some(Kind::Video));
     assert_eq!(media::kind(Path::new("clip.avi")), Some(Kind::Video));
     assert_eq!(media::kind(Path::new("clip.mkv")), Some(Kind::Video));
+    assert_eq!(media::kind(Path::new("scan.TIFF")), Some(Kind::Image));
+    assert_eq!(media::kind(Path::new("photo.heic")), Some(Kind::Image));
+    assert_eq!(media::kind(Path::new("photo.png")), None);
+    assert_eq!(media::kind(Path::new("logo.svg")), None);
     assert_eq!(media::kind(Path::new("notes.md")), None);
 }
 
@@ -74,6 +78,27 @@ fn a_video_gets_a_frame_and_its_length() {
     assert_eq!(made.error, None);
     assert!((made.duration.unwrap() - 2.0).abs() < 0.1);
     assert!(previews.join(made.poster.unwrap()).exists());
+}
+
+#[test]
+fn a_tiff_gets_a_png_poster() {
+    if !installed("ffmpeg") {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let tiff = dir.path().join("scan.tiff");
+    let status = Command::new("ffmpeg")
+        .args(["-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240", "-frames:v", "1"])
+        .arg(&tiff)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let previews = dir.path().join("previews");
+
+    let made = media::make(&previews, &tiff).unwrap();
+    assert_eq!(made.error, None);
+    let poster = previews.join(made.poster.unwrap());
+    assert_eq!(std::fs::read(poster).unwrap()[..8], *b"\x89PNG\r\n\x1a\n");
 }
 
 #[test]
