@@ -6,7 +6,7 @@
   import type { Item } from "../../lib/api.ts";
   import IssueCard from "../../lib/IssueCard.svelte";
   import { plainText } from "../../lib/markdown/plain.ts";
-  import { c, ring } from "../../lib/theme.ts";
+  import { c, ring, stateTransition } from "../../lib/theme.ts";
   import LocalBoard from "./LocalBoard.svelte";
   import { icons } from "../../lib/icons.ts";
   import { duration, pages } from "../../lib/media.ts";
@@ -160,6 +160,7 @@
       paddingX: s(14),
       background: target ? c.accentSoft : c.surface,
       borderColor: selected || target ? c.accent : open ? c.borderStrong : c.border,
+      transition: stateTransition,
     }}
     hover={{ borderColor: selected || target ? c.accent : c.borderStrong }}
   >

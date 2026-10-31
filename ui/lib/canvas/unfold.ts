@@ -45,6 +45,25 @@ export function unfoldLayout(folder: Rect, things: Folded[]): Map<string, Point>
   return spots;
 }
 
+/** At most this much of the unfolding passes between one thing setting off and the next. */
+const STAGGER = 0.08;
+
+/**
+ * How far along the thing at `index` of `count` is when the whole unfolding is at `progress`,
+ * both 0 to 1: each sets off a little after the one before, and all arrive together.
+ */
+export function stagger(progress: number, index: number, count: number): number {
+  const step = Math.min(STAGGER, 0.5 / Math.max(1, count - 1));
+  const span = 1 - step * (count - 1);
+  return Math.min(1, Math.max(0, (progress - index * step) / span));
+}
+
+/** Where a `w` × `h` thing is at `t` on its way from under the folder's middle to `spot`. */
+export function onTheWay(folder: Rect, spot: Point, w: number, h: number, t: number): Point {
+  const start = { x: folder.x + (folder.w - w) / 2, y: folder.y + (folder.h - h) / 2 };
+  return { x: start.x + (spot.x - start.x) * t, y: start.y + (spot.y - start.y) * t };
+}
+
 /** The box around everything placed, or null when nothing is. */
 export function bounds(rects: Rect[]): Rect | null {
   if (rects.length === 0) return null;

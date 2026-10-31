@@ -7,13 +7,13 @@
   import { fade, fly } from "svelte/transition";
   import type { Arrow, CanvasNode, Card, ProjectView } from "../../lib/api.ts";
   import { contains, freeSpot, type Point } from "../../lib/canvas/geometry.ts";
-  import { glide } from "../../lib/canvas/motion.ts";
-  import { bounds, unfoldLayout } from "../../lib/canvas/unfold.ts";
+  import { cubicBezier, glide, tween } from "../../lib/canvas/motion.ts";
+  import { bounds, onTheWay, stagger, unfoldLayout } from "../../lib/canvas/unfold.ts";
   import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { app } from "../../lib/state.svelte.ts";
-  import { c, eyebrow, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
+  import { c, easing, eyebrow, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
   import Files, { isFileDrag } from "./Files.svelte";
   import FolderName from "./FolderName.svelte";
@@ -59,8 +59,11 @@
     { icon: icons.folder, label: "Folder", onpress: () => void newFolder() },
   ];
 
-  /** The folder whose contents are laid out beside it, by its node's id. */
+  /** The folder whose contents are laid out beside it, by its node's id, while it folds too. */
   let unfolded = $state<string | null>(null);
+  /** How far its contents have come out from under it: 0 folded, 1 in their rows. */
+  let spread = $state(0);
+  let stopSpread: (() => void) | null = null;
   /** The node being dragged onto a folder, and the folder it would go into if let go now. */
   let dropping = $state<{ node: string; folder: string } | null>(null);
 
@@ -82,6 +85,33 @@
     w: number;
     h: number;
     raw: CanvasNode;
+    /** Below 1 while it comes out of a folder or goes back in. */
+    opacity?: number;
+  }
+
+  /** The design system's easing for things that arrive and leave, and how long each takes. */
+  const easeOut = cubicBezier(easing.out);
+  const UNFOLD_MS = 420;
+  const FOLD_MS = 300;
+
+  /** Fetches the folder's contents, then lets them come out from under it. */
+  async function unfold(id: string) {
+    stopSpread?.();
+    const next = await app.run(() => app.api.projectView(folder, inside, [id]));
+    if (!next) return;
+    data = next;
+    unfolded = id;
+    spread = 0;
+    stopSpread = tween(0, 1, UNFOLD_MS, (value) => (spread = value));
+  }
+
+  $effect(() => () => stopSpread?.());
+
+  /** Takes the contents back under the folder, from wherever they are on their way. */
+  function fold() {
+    if (!unfolded) return;
+    stopSpread?.();
+    stopSpread = tween(spread, 0, FOLD_MS * spread, (value) => (spread = value), () => (unfolded = null));
   }
 
   /** What a node is called, for sorting an unfolded folder's rows. */
@@ -92,8 +122,8 @@
     return n.text ?? "";
   }
 
-  // The canvas's own nodes where they are, then the unfolded folder's in rows beside it. The
-  // folder's nodes stay until the host's next answer, so folding hides them at once.
+  // The canvas's own nodes where they are, then the unfolded folder's on their way from under it
+  // to their rows beside it, one after the other in the rows' order.
   const nodes = $derived.by<Placed[]>(() => {
     const all = data?.nodes ?? [];
     const own = all
@@ -106,9 +136,12 @@
       folderNode,
       inner.map((n) => ({ id: n.id, kind: n.item?.kind ?? n.type, title: nameOf(n), w: n.width, h: n.height })),
     );
+    const order = [...spots.keys()];
     const laid = inner.map((n) => {
       const spot = spots.get(n.id) ?? { x: n.x, y: n.y };
-      return { id: n.id, x: spot.x, y: spot.y, w: n.width, h: n.height, raw: n };
+      const t = easeOut(stagger(spread, order.indexOf(n.id), order.length));
+      const at = onTheWay(folderNode, spot, n.width, n.height, t);
+      return { id: n.id, x: at.x, y: at.y, w: n.width, h: n.height, raw: n, opacity: t };
     });
     return [...own, ...laid];
   });
@@ -279,15 +312,15 @@
    */
   function select(id: string | null) {
     selected = id;
-    if (id === null) unfolded = null;
+    if (id === null) fold();
   }
 
   /** A press on a folder of this canvas unfolds it, and folds it again. */
   function pressed(id: string) {
     const node = data?.nodes.find((n) => n.id === id);
     if (node?.item?.kind !== "folder" || node.in) return;
-    if (unfolded === id) unfolded = null;
-    else unfolded = id;
+    if (unfolded === id) fold();
+    else void unfold(id);
   }
 
   function open(id: string) {
@@ -493,7 +526,7 @@
     >
       {#snippet node(n, zoom)}
         <!-- Held over a folder, a node lets the folder show through. -->
-        <View style={{ flex: 1, opacity: dropping?.node === n.id ? 0.45 : 1, transition: 120 }}>
+        <View style={{ flex: 1, opacity: dropping?.node === n.id ? 0.45 : (n.opacity ?? 1) }}>
           {#if n.raw.item?.kind === "board"}
             <BoardNode board={data!.board} project={data!.project} {zoom} {placed} />
           {:else if n.raw.type === "text"}

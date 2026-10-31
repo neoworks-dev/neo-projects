@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bounds, unfoldLayout } from "./unfold.ts";
+import { bounds, onTheWay, stagger, unfoldLayout } from "./unfold.ts";
 
 const folder = { x: 0, y: 100, w: 220, h: 64 };
 
@@ -24,6 +24,21 @@ test("kinds without a row of their own come last", () => {
   ]);
   expect(spots.get("issue")).toEqual({ x: 268, y: 100 });
   expect(spots.get("sticky")).toEqual({ x: 268, y: 100 + 120 + 28 });
+});
+
+test("each thing sets off a little after the one before, and all arrive together", () => {
+  expect(stagger(0, 0, 3)).toBe(0);
+  expect(stagger(0.1, 0, 3)).toBeGreaterThan(stagger(0.1, 2, 3));
+  expect(stagger(0.05, 2, 3)).toBe(0);
+  for (const index of [0, 1, 2]) expect(stagger(1, index, 3)).toBe(1);
+  // However many there are, the last still sets off before the end.
+  expect(stagger(0.6, 39, 40)).toBeGreaterThan(0);
+});
+
+test("on the way, a thing starts centred under the folder and ends at its spot", () => {
+  expect(onTheWay(folder, { x: 268, y: 100 }, 20, 10, 0)).toEqual({ x: 100, y: 127 });
+  expect(onTheWay(folder, { x: 268, y: 100 }, 20, 10, 1)).toEqual({ x: 268, y: 100 });
+  expect(onTheWay(folder, { x: 268, y: 100 }, 20, 10, 0.5)).toEqual({ x: 184, y: 113.5 });
 });
 
 test("the bounds hold every box", () => {
