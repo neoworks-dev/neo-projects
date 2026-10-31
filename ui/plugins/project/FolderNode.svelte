@@ -9,7 +9,8 @@
   import { c, ring, stateTransition, stickyTint } from "../../lib/theme.ts";
 
   // `height` is the node's, in world units. `open` while its contents are unfolded beside it,
-  // `target` while a dragged node would go in.
+  // `target` while a dragged node would go in, and `opening`, 0 to 1, while nodes fall in: the
+  // front lowers and what peeks out rises.
   let {
     item,
     zoom,
@@ -17,6 +18,7 @@
     selected,
     open,
     target,
+    opening = 0,
   }: {
     item: Extract<Item, { kind: "folder" }>;
     zoom: number;
@@ -24,6 +26,7 @@
     selected: boolean;
     open: boolean;
     target: boolean;
+    opening?: number;
   } = $props();
 
   /** Below this height (world units) nothing has room to peek out, and the folder is its front. */
@@ -50,7 +53,7 @@
   <View
     style={{
       position: "absolute",
-      top: 16 + index * 11,
+      top: 16 + index * 11 - 8 * opening,
       left: 14 + index * 12,
       right: 14 + (item.peek.length - 1 - index) * 12,
       // Down behind the front, however tall the folder is.
@@ -127,7 +130,7 @@
       right: 0,
       bottom: 0,
       top: peeking ? undefined : 0,
-      height: peeking ? "46%" : undefined,
+      height: peeking ? `${46 - 12 * opening}%` : undefined,
       radius: 12,
       background: target ? c.hover : c.surface,
       borderWidth: 1,
@@ -140,7 +143,7 @@
     }}
   >
     <View style={{ direction: "row", align: "center", gap: 7 }}>
-      <Image src={fileIcon(item.title, true, open)} style={{ size: 16, shrink: 0 }} />
+      <Image src={fileIcon(item.title, true, open || opening > 0.3)} style={{ size: 16, shrink: 0 }} />
       <Text style={{ flex: 1, fontSize: 13.5, truncate: true }}>{item.title}</Text>
     </View>
     {#if zoom >= 0.45}
