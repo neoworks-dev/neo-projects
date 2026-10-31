@@ -77,7 +77,8 @@
   </View>
 {:else if item.kind === "image"}
   {@const fitted = contain(width, height, item.aspect ?? 4 / 3)}
-  <!-- The image itself, at its own proportions inside the node, as a poster is. -->
+  <!-- The image itself, at its own proportions inside the node, as a poster is. Its border only
+       shows when selected: around a PNG's transparent parts it would outline an empty box. -->
   <View style={{ flex: 1, align: "center", justify: "center" }}>
     <View
       style={{
@@ -85,7 +86,7 @@
         height: fitted.h,
         radius: 8,
         borderWidth: 1,
-        borderColor: selected ? c.accent : c.border,
+        borderColor: selected ? c.accent : "transparent",
         shadow: selected ? ring : null,
         transition: 140,
       }}
