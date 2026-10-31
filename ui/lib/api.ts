@@ -96,6 +96,8 @@ export type Item =
   | { kind: "note"; uri: string | null; path: string; abs: string; title: string; excerpt: string }
   /** `aspect` is the width divided by the height, null when the file's header doesn't say. */
   | { kind: "image"; uri: string | null; path: string; title: string; aspect: number | null }
+  /** A text or code file: its first lines, and the grammar to highlight them with ("" for plain text). */
+  | { kind: "sheet"; uri: string | null; path: string; title: string; lang: string; head: string }
   | { kind: "file"; uri: string | null; path: string; title: string; mime: string | null; media?: FileMedia }
   | { kind: "issue"; uri: string; card: Card }
   | { kind: "link"; uri: string; title: string; host: string; preview?: LinkPreview }

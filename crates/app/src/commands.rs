@@ -9,7 +9,7 @@ use np_core::workspace::{
     self, Stroke, Uri, attach_file, copy_file_as, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
 };
 use rusqlite::OptionalExtension;
-use np_core::{Error, fields, media, views};
+use np_core::{Error, fields, media, sheet, views};
 use serde_json::{Map, Value, json};
 use svelte_gpui::{CommandError, Commands};
 
@@ -603,6 +603,8 @@ fn link_files(open: &Open, paths: &[PathBuf]) -> np_core::Result<Value> {
             (320.0, 180.0)
         } else if path.extension().is_some_and(|e| e == "md") {
             (300.0, 200.0)
+        } else if sheet::is_sheet(&path) {
+            (320.0, 240.0)
         } else {
             (280.0, 76.0)
         };

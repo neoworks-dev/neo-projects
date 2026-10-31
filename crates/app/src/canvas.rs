@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use np_core::media::{self, Media};
 use np_core::previews::{self, Preview};
-use np_core::views;
+use np_core::{sheet, views};
 use np_core::workspace::{
     self, Canvas, Node, Project, Stroke, Uri, Workspace, folder_canvas_path, folder_of, issues, read_canvas,
     read_note, write_canvas,
@@ -424,6 +424,11 @@ fn file_item(ws: &Workspace, uri: Option<String>, path: Option<PathBuf>) -> Valu
         return json!({"kind": "image", "uri": uri, "path": path, "title": title, "aspect": aspect(&path)});
     }
     let name = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    if sheet::is_sheet(&path)
+        && let Some(head) = sheet::head(&path)
+    {
+        return json!({"kind": "sheet", "uri": uri, "path": path, "title": name, "lang": sheet::lang(&path), "head": head});
+    }
     let mut file = json!({"kind": "file", "uri": uri, "path": path, "title": name, "mime": mime});
     if let Some(made) = media::get(&crate::previews::dir(ws), &path) {
         file["media"] = media_json(ws, made);
