@@ -23,7 +23,7 @@
     unfoldLayout,
     type Folded,
   } from "../../lib/canvas/unfold.ts";
-  import { pastedUrl } from "../../lib/canvas/paste.ts";
+  import { pasted, pastedImageName, pastedText, type Pasted } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
   import Viewport, { type DrawTool, type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
   import { relationOptions } from "../../lib/relations.ts";
@@ -723,20 +723,52 @@
     return { x: view.x + (size.width / 2 - 140) / view.zoom, y: view.y + (size.height / 2 - 80) / view.zoom };
   }
 
-  /** Adds the link on the clipboard to the middle of the view; other text is left alone. */
+  /**
+   * Adds what the clipboard holds to the middle of the view: an image, saved into the project's
+   * folder; files a file manager copied; a link; or text, as a sticky note or a note. Text that
+   * only looked like paths of files is added as text.
+   */
   async function paste() {
-    const url = pastedUrl(await clipboard.read());
-    if (!url) return;
-    const node = await app.run(() => app.api.linkUrl(url));
-    if (node) add(node, centre());
+    const at = centre();
+    const image = await clipboard.readImage();
+    if (image) {
+      const node = await app.run(() => app.api.copyFileIn(here, image.path, pastedImageName(new Date(), image.mime)));
+      if (node) add(node, at);
+      return;
+    }
+    const text = await clipboard.read();
+    const what = pasted(text);
+    if (!what) return;
+    if (what.kind === "link") {
+      const node = await app.run(() => app.api.linkUrl(what.url));
+      if (node) add(node, at);
+      return;
+    }
+    if (what.kind === "files" && (await files(what.paths, at))) return;
+    await pasteText(what.kind === "files" ? pastedText(text.trim()) : what, at);
   }
 
-  async function files(paths: string[], at: Point) {
+  /** Adds pasted text as a sticky note, or as a note in the project's folder. */
+  async function pasteText(what: Pasted, at: Point) {
+    if (what.kind === "sticky") {
+      add({ id: newId(), type: "text", text: what.text, color: "3", x: at.x, y: at.y, width: 240, height: 170 }, at);
+      return;
+    }
+    if (what.kind !== "note") return;
+    await app.run(async () => {
+      const note = await app.api.createNote(here, what.title);
+      await app.api.writeNote(note.path, what.body);
+      add({ id: newId(), type: "file", file: note.path, x: at.x, y: at.y, width: 280, height: 160 }, at);
+    });
+  }
+
+  /** Links the files `paths` onto the canvas at `at`; answers whether any of them was there to link. */
+  async function files(paths: string[], at: Point): Promise<boolean> {
     const linked = await app.run(() => app.api.linkFiles(paths));
-    if (!linked || !data) return;
+    if (!linked || linked.length === 0 || !data) return false;
     if (linked.length === 1) {
       place(linked[0], at);
-      return;
+      return true;
     }
     let next = [...data.nodes];
     for (const node of linked) {
@@ -749,6 +781,7 @@
       next = [...next, { ...node, x: Math.round(spot.x), y: Math.round(spot.y) }];
     }
     save(next);
+    return true;
   }
 
   function isCard(d: unknown): d is { kind: "card"; card: Card } {

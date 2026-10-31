@@ -25,7 +25,7 @@ use serde_json::{Map, Value};
 pub use board::{Board, BoardColumn, Column, Filter, board_notes, read_board, write_board};
 pub use canvas::{Canvas, Edge, Node, Stroke, folder_canvas_path, folder_of, read_canvas, write_canvas};
 pub use index::{SearchHit, apply, index_all, index_path, mime_for, rename_path, search};
-pub use note::{Note, attach_file, create_note, ensure_id, read_note, read_props, rename_prop, set_prop, write_body};
+pub use note::{Note, attach_file, copy_file_as, create_note, ensure_id, read_note, read_props, rename_prop, set_prop, write_body};
 pub use project::{Project, ProjectError};
 pub use relations::Relation;
 pub use uri::Uri;

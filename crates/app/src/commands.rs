@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use np_core::github::{Client, Http};
 use np_core::workspace::{
-    self, Stroke, Uri, attach_file, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
+    self, Stroke, Uri, attach_file, copy_file_as, create_note, ensure_id, issues, read_note, read_props, rename_prop, set_prop, write_body,
 };
 use rusqlite::OptionalExtension;
 use np_core::{Error, fields, media, views};
@@ -307,6 +307,16 @@ pub fn all(commands: Commands, app: Arc<App>) -> Commands {
             args["paths"].as_array().into_iter().flatten().filter_map(Value::as_str).map(PathBuf::from).collect();
         link_files(&open, &paths).map_err(fail)
     });
+    // A file from outside the workspace, such as an image pasted from the clipboard, copied into
+    // the folder `dir` as `name`. Answers with its node.
+    command!("file_copy_in", |app: &App, args: Value| {
+        let open = app.get().map_err(fail)?;
+        let dir = open.ws().root().join(arg(&args, "dir")?);
+        let copied = copy_file_as(&dir, Path::new(arg(&args, "file")?), arg(&args, "name")?).map_err(fail)?;
+        open.wrote(&copied);
+        let nodes = link_files(&open, &[copied]).map_err(fail)?;
+        Ok(nodes[0].clone())
+    });
     command!("url_link", |app: &App, args: Value| {
         let url = arg(&args, "url")?.trim().to_string();
         let url = if url.contains("://") { url } else { format!("https://{url}") };
@@ -566,13 +576,17 @@ fn unrelate(open: &Open, arrow: &Value) -> np_core::Result<()> {
     Ok(())
 }
 
-/// Canvas nodes for files dropped on the window. Files are linked where they are: inside the
-/// workspace by path, elsewhere through a linked root for their folder (added when needed).
+/// Canvas nodes for files dropped on the window or pasted. Files are linked where they are: inside
+/// the workspace by path, elsewhere through a linked root for their folder (added when needed).
+/// A path with no file behind it gets no node: pasted text can look like paths.
 fn link_files(open: &Open, paths: &[PathBuf]) -> np_core::Result<Value> {
     let mut ws = open.ws();
     let mut nodes = Vec::new();
     for (i, path) in paths.iter().enumerate() {
         let path = expand(path);
+        if !path.exists() {
+            continue;
+        }
         let offset = i as f64 * 30.0;
         let image = workspace::mime_for(&path).starts_with("image/");
         // A PDF's poster is a page, upright; a video's a frame, wide.

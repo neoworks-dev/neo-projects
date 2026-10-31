@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use np_core::workspace::{attach_file, read_props, rename_prop};
+use np_core::workspace::{attach_file, copy_file_as, read_props, rename_prop};
 use serde_json::json;
 
 fn file(text: &str) -> (tempfile::TempDir, PathBuf) {
@@ -68,4 +68,18 @@ fn an_attached_file_is_copied_next_to_the_note_under_a_free_name() {
     // A file already beside the note is linked where it is, not copied again.
     assert_eq!(attach_file(dir.path(), &first).unwrap(), first);
     assert!(!dir.path().join("photo 3.png").exists());
+}
+
+#[test]
+fn a_pasted_file_is_copied_in_under_the_name_it_is_given() {
+    let (dir, _) = file("");
+    let outside = tempfile::tempdir().unwrap();
+    let pasted = outside.path().join("svelte-gpui-clipboard-0123abcd.png");
+    std::fs::write(&pasted, b"pixels").unwrap();
+
+    let first = copy_file_as(dir.path(), &pasted, "Pasted image.png").unwrap();
+    let second = copy_file_as(dir.path(), &pasted, "Pasted image.png").unwrap();
+    assert_eq!(first, dir.path().join("Pasted image.png"));
+    assert_eq!(second, dir.path().join("Pasted image 2.png"));
+    assert_eq!(std::fs::read(&first).unwrap(), b"pixels");
 }

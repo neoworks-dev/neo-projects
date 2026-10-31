@@ -4,7 +4,7 @@ class ProjectKeys {
   remove: (() => boolean) | null = null;
   /** Adds a note in the middle of the view and opens it. */
   note: (() => void) | null = null;
-  /** Adds the link on the clipboard to the canvas. */
+  /** Adds what the clipboard holds to the canvas: an image, files, a link or text. */
   paste: (() => void) | null = null;
   /** Adds a sticky note in the middle of the view, ready to write in. */
   sticky: (() => void) | null = null;
