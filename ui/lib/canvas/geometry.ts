@@ -130,6 +130,12 @@ export type Handle = "ne" | "nw" | "se" | "sw";
 
 export const handles: Handle[] = ["nw", "ne", "se", "sw"];
 
+/** The cursor over a corner and while dragging it: a diagonal arrow along the way it resizes. */
+export function handleCursor(handle: Handle): "nwse-resize" | "nesw-resize" {
+  if (handle === "nw" || handle === "se") return "nwse-resize";
+  return "nesw-resize";
+}
+
 /** How large a corner's grab square is, in screen pixels. */
 const CORNER = 16;
 

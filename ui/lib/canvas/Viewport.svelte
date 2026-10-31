@@ -71,6 +71,7 @@
     dotPoint,
     dotSide,
     grabZone,
+    handleCursor,
     handles,
     midpoint,
     near,
@@ -263,6 +264,14 @@
 
   /** A node being resized by one of its handles: its box when it started, and as it is now. */
   let resize = $state<{ id: string; handle: Handle; start: Rect; from: Point; rect: Rect } | null>(null);
+
+  /** The background's cursor, which also shows while a resize runs ahead of its corner. */
+  const backgroundCursor = $derived.by(() => {
+    if (panning) return "grabbing";
+    if (resize) return handleCursor(resize.handle);
+    if (tool) return "crosshair";
+    return "default";
+  });
 
   function placed(n: N): N {
     const start = drag?.starts.get(n.id);
@@ -649,7 +658,7 @@
 >
   <DropTarget {accept} ondrop={dropped} style={{ position: "absolute", inset: 0 }}>
     <View
-      style={{ position: "absolute", inset: 0, background: c.bg, cursor: panning ? "grabbing" : tool ? "crosshair" : "default" }}
+      style={{ position: "absolute", inset: 0, background: c.bg, cursor: backgroundCursor }}
       ondown={backgroundDown}
       onmove={backgroundMove}
       onup={backgroundUp}
@@ -764,6 +773,7 @@
               top: zone.y / zoom,
               width: zone.w / zoom,
               height: zone.h / zoom,
+              cursor: handleCursor(handle),
             }}
             ondown={(e) => resizeDown(n, handle, e)}
             onmove={(e) => resizeMove(n, e)}

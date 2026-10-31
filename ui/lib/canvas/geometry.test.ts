@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { arrowPath, contain, dotPoint, dotSide, gapBetween, grabZone, midpoint, near, resized, spanned, touches } from "./geometry.ts";
+import { arrowPath, contain, dotPoint, dotSide, gapBetween, grabZone, handleCursor, midpoint, near, resized, spanned, touches } from "./geometry.ts";
 
 const box = (x: number, y: number) => ({ x, y, w: 100, h: 60 });
 
@@ -62,6 +62,13 @@ describe("resized", () => {
     expect(resized(start, "nw", -10, -100, min, true)).toEqual({ x: -100, y: 0, w: 400, h: 200 });
     expect(resized(start, "se", -500, -500, min, true)).toEqual({ x: 100, y: 100, w: 100, h: 50 });
   });
+});
+
+test("a corner's cursor points along the diagonal it resizes", () => {
+  expect(handleCursor("nw")).toBe("nwse-resize");
+  expect(handleCursor("se")).toBe("nwse-resize");
+  expect(handleCursor("ne")).toBe("nesw-resize");
+  expect(handleCursor("sw")).toBe("nesw-resize");
 });
 
 test("grab zones straddle the corners, in screen pixels", () => {
