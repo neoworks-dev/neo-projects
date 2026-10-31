@@ -532,7 +532,7 @@ fn link_files(open: &Open, paths: &[PathBuf]) -> np_core::Result<Value> {
         } else if media::kind(&path) == Some(media::Kind::Pdf) {
             (240.0, 340.0)
         } else if media::kind(&path) == Some(media::Kind::Video) {
-            (320.0, 230.0)
+            (320.0, 180.0)
         } else if path.extension().is_some_and(|e| e == "md") {
             (300.0, 200.0)
         } else {
