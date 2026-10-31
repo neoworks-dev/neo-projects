@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { arrowPath, contain, dotPoint, gapBetween, grabZone, midpoint, near, nearestSide, resized, spanned, touches } from "./geometry.ts";
+import { arrowPath, contain, dotPoint, dotSide, gapBetween, grabZone, midpoint, near, resized, spanned, touches } from "./geometry.ts";
 
 const box = (x: number, y: number) => ({ x, y, w: 100, h: 60 });
 
@@ -84,12 +84,14 @@ test("contain fits the proportions inside the box, touching two sides", () => {
   expect(contain(200, 100, 2)).toEqual({ w: 200, h: 100 });
 });
 
-test("the nearest side is the closest edge, from inside or outside", () => {
+test("a dot comes out only near where it sits, and holds on a little further", () => {
   const r = { x: 0, y: 0, w: 200, h: 100 };
-  expect(nearestSide(r, { x: 100, y: 10 })).toBe("n");
-  expect(nearestSide(r, { x: 190, y: 50 })).toBe("e");
-  expect(nearestSide(r, { x: 100, y: 115 })).toBe("s");
-  expect(nearestSide(r, { x: -12, y: 20 })).toBe("w");
+  expect(dotSide(r, { x: 100, y: 5 }, 1, 16, 28, 44, null)).toBe("n");
+  expect(dotSide(r, { x: 195, y: 50 }, 1, 16, 28, 44, null)).toBe("e");
+  expect(dotSide(r, { x: 100, y: 50 }, 1, 16, 28, 44, null)).toBe(null);
+  expect(dotSide(r, { x: 20, y: 5 }, 1, 16, 28, 44, null)).toBe(null);
+  expect(dotSide(r, { x: 100, y: 22 }, 1, 16, 28, 44, null)).toBe(null);
+  expect(dotSide(r, { x: 100, y: 22 }, 1, 16, 28, 44, "n")).toBe("n");
 });
 
 test("near finds the topmost node within the margin", () => {

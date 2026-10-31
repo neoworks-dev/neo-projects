@@ -47,8 +47,8 @@
   // on the background draws a stroke or erases the strokes it crosses. Drag the background to select the nodes in a box (Shift adds to the selection),
   // drag it with the middle or right button or turn the wheel to pan, Ctrl+wheel to zoom. Press a
   // node to select it, Shift+press to add or take it out. Drag a node to move it with the rest of
-  // the selection, or its corners to resize it. Near a node, a dot slides out past the
-  // edge nearest the pointer; drag it onto another node to connect them, from every selected node
+  // the selection, or its corners to resize it. Near the middle of a node's edge, a dot
+  // slides out past it; drag it onto another node to connect them, from every selected node
   // when it is one of them. Files from other programs and in-app drags (a card from a board) can be
   // dropped anywhere.
   import {
@@ -69,11 +69,11 @@
     arrowPath,
     contains,
     dotPoint,
+    dotSide,
     grabZone,
     handles,
     midpoint,
     near,
-    nearestSide,
     resized,
     spanned,
     touches,
@@ -213,15 +213,18 @@
   const ERASER = 8;
   let pointer: Point | null = null;
 
-  /** How close the pointer comes to a node, in screen pixels, before its arrow dot shows. */
+  /** How close the pointer comes to a node, in screen pixels, before it has its resize handles. */
   const NEAR = 20;
   /** How far the dot slides out past the node's edge, in screen pixels. */
   const DOT_OUT = 16;
+  /** How close the pointer comes to where a dot sits before it slides out, and how far it may go before it slides back. */
+  const DOT_REACH = 28;
+  const DOT_KEEP = 44;
   /**
-   * The node the pointer is near and the side it is nearest. The arrow dot is out on that side,
-   * and the node has its resize handles.
+   * The node the pointer is near, which has its resize handles, and the side whose arrow dot is
+   * out, if the pointer is close to one.
    */
-  let nearby = $state<{ id: string; side: Side } | null>(null);
+  let nearby = $state<{ id: string; side: Side | null } | null>(null);
   /** The pointer is on the dot's grab area, so a press there starts an arrow. */
   let dotHot = $state(false);
 
@@ -234,7 +237,9 @@
       dotHot = false;
       return;
     }
-    const side = nearestSide(found, at);
+    let kept: Side | null = null;
+    if (nearby?.id === found.id) kept = nearby.side;
+    const side = dotSide(found, { x: at.x * zoom, y: at.y * zoom }, zoom, DOT_OUT, DOT_REACH, DOT_KEEP, kept);
     if (nearby?.id === found.id && nearby.side === side) return;
     // A dot taken away under the pointer never hears it leave.
     nearby = { id: found.id, side };
@@ -703,8 +708,8 @@
       </AtScreenSize>
     {/each}
     {#each visible as n (n.id)}
-      {#if linkable && nearby?.id === n.id && !drag && !resize}
-        <!-- The dot for drawing an arrow, on the side nearest the pointer, drawn before the node
+      {#if linkable && nearby?.id === n.id && nearby.side && !drag && !resize}
+        <!-- The dot for drawing an arrow, on the side the pointer came close to, drawn before the node
              so it slides out from under that edge. Keyed by side: moving to another side slides
              this one back in and the next one out. Its grab area is larger than the dot, and the
              dot fills while the pointer is on it. -->

@@ -165,16 +165,26 @@ export function contain(w: number, h: number, aspect: number): { w: number; h: n
   return { w, h: w / aspect };
 }
 
-/** The side of `r` that `at` is closest to, inside or outside it. */
-export function nearestSide(r: Rect, at: Point): Side {
-  const distances: [Side, number][] = [
-    ["n", Math.abs(at.y - r.y)],
-    ["e", Math.abs(at.x - (r.x + r.w))],
-    ["s", Math.abs(at.y - (r.y + r.h))],
-    ["w", Math.abs(at.x - r.x)],
-  ];
-  distances.sort((a, b) => a[1] - b[1]);
-  return distances[0][0];
+const sides: Side[] = ["n", "e", "s", "w"];
+
+/**
+ * The side of `r` whose arrow dot (`out` past its middle) the pointer at `at` is within `reach`
+ * of, all in screen pixels; the nearest when several are, or null. The side `kept`, whose dot is
+ * already out, holds on to the pointer up to `keep`, so the dot doesn't flicker at the edge of
+ * its reach.
+ */
+export function dotSide(r: Rect, at: Point, zoom: number, out: number, reach: number, keep: number, kept: Side | null): Side | null {
+  let found: Side | null = null;
+  let nearest = Infinity;
+  for (const side of sides) {
+    const dot = dotPoint(r, side, zoom, out).at;
+    const distance = Math.hypot(dot.x - at.x, dot.y - at.y);
+    if (distance <= (side === kept ? keep : reach) && distance < nearest) {
+      found = side;
+      nearest = distance;
+    }
+  }
+  return found;
 }
 
 /** The topmost of `nodes` (the last drawn) within `margin` of `at`, or null. */
