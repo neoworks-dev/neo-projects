@@ -11,7 +11,8 @@
   import { bounds, onTheWay, stagger, unfoldLayout } from "../../lib/canvas/unfold.ts";
   import { pastedUrl } from "../../lib/canvas/paste.ts";
   import Toolbar, { type Tool } from "../../lib/canvas/Toolbar.svelte";
-  import Viewport, { type ViewState } from "../../lib/canvas/Viewport.svelte";
+  import Viewport, { type Move, type ViewState } from "../../lib/canvas/Viewport.svelte";
+  import { relationOptions } from "../../lib/relations.ts";
   import { app } from "../../lib/state.svelte.ts";
   import { c, easing, eyebrow, ghost, radii, shadow, stickyTint } from "../../lib/theme.ts";
   import BoardNode from "./BoardNode.svelte";
@@ -28,9 +29,9 @@
 
   let data = $state<ProjectView | null>(null);
   let view = $state<ViewState>({ x: -40, y: -60, zoom: 0.9 });
-  let selected = $state<string | null>(null);
+  let selected = $state<string[]>([]);
   let selectedArrow = $state<string | null>(null);
-  let connecting = $state<{ from: string; to: string } | null>(null);
+  let connecting = $state<{ from: string[]; to: string } | null>(null);
   let size = $state({ width: 800, height: 600 });
 
   /** Where new notes, boards and folders go: the open folder's directory, or the project's. */
@@ -185,39 +186,100 @@
     if (!data) return;
     const spot = freeSpot(nodes, at, node.width, node.height);
     save([...data.nodes, { ...node, x: Math.round(spot.x), y: Math.round(spot.y) }]);
-    selected = node.id;
+    selected = [node.id];
   }
 
   /** Adds a node centred on where it was dropped: a drop chooses its place. */
   function place(node: CanvasNode, at: Point) {
     if (!data) return;
     save([...data.nodes, { ...node, x: Math.round(at.x - node.width / 2), y: Math.round(at.y - node.height / 2) }]);
-    selected = node.id;
+    selected = [node.id];
   }
 
   function newId(): string {
     return Math.random().toString(16).slice(2, 18);
   }
 
-  /** The folder under `centre` that the node `id` would go into, other than itself. */
-  function folderAt(id: string, centre: Point): { id: string; canvas: string } | null {
+  /** The folder under `centre` that the nodes `ids` would go into, other than one of them. */
+  function folderAt(ids: string[], centre: Point): { id: string; canvas: string } | null {
     for (const n of nodes) {
       const item = n.raw.item;
-      if (n.id !== id && item?.kind === "folder" && contains(n, centre)) return { id: n.id, canvas: item.canvas };
+      if (!ids.includes(n.id) && item?.kind === "folder" && contains(n, centre)) return { id: n.id, canvas: item.canvas };
     }
     return null;
+  }
+
+  /** The nodes a drag of `id` moves: the selection when it is part of it. */
+  function dragged(id: string): string[] {
+    if (selected.includes(id)) return selected;
+    return [id];
   }
 
   function dragging(id: string, x: number, y: number) {
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
-    const into = folderAt(id, { x: x + node.w / 2, y: y + node.h / 2 });
+    const into = folderAt(dragged(id), { x: x + node.w / 2, y: y + node.h / 2 });
     if (into) dropping = { node: id, folder: into.id };
     else dropping = null;
   }
 
-  function moved(id: string, x: number, y: number) {
+  function moved(moves: Move[], grabbed: string) {
     dropping = null;
+    if (moves.length === 1) {
+      movedOne(moves[0].id, moves[0].x, moves[0].y);
+      return;
+    }
+    movedGroup(moves, grabbed);
+  }
+
+  /**
+   * Several nodes let go: the one held decides where they go. Over a folder they all go into it,
+   * over the board the issues among them return to it, and anywhere else they stay where they were
+   * let go. An unfolded folder's nodes go back to its rows unless they go into another folder.
+   */
+  function movedGroup(moves: Move[], grabbed: string) {
+    if (!data) return;
+    const held = data.nodes.find((n) => n.id === grabbed);
+    const lead = moves.find((m) => m.id === grabbed);
+    if (!held || !lead) return;
+    const centre = { x: lead.x + held.width / 2, y: lead.y + held.height / 2 };
+    const ids = moves.map((m) => m.id);
+    const into = folderAt(ids, centre);
+    if (into) {
+      void moveAllInto(ids, into.canvas);
+      return;
+    }
+    const onBoard = boardNode !== undefined && contains(boardNode, centre);
+    const at = new Map(moves.map((m) => [m.id, m]));
+    const next = data.nodes.flatMap((n) => {
+      const move = at.get(n.id);
+      if (!move || n.in) return [n];
+      if (onBoard && n.item?.kind === "issue") return [];
+      return [{ ...n, x: move.x, y: move.y }];
+    });
+    save(next);
+  }
+
+  /** Moves the nodes `ids` onto the folder canvas `into`, one after the other, then reloads. */
+  async function moveAllInto(ids: string[], into: string) {
+    if (!data) return;
+    const path = data.path;
+    const moving = data.nodes.filter((n) => ids.includes(n.id));
+    data = { ...data, nodes: data.nodes.filter((n) => !ids.includes(n.id)) };
+    selected = [];
+    for (const node of moving) {
+      let from = path;
+      let id = node.id;
+      if (node.in) {
+        from = node.in.canvas;
+        id = node.in.id;
+      }
+      if (from !== into) await app.run(() => app.api.putInFolder(from, id, into));
+    }
+    app.version++;
+  }
+
+  function movedOne(id: string, x: number, y: number) {
     if (!data) return;
     const node = data.nodes.find((n) => n.id === id);
     if (!node) return;
@@ -231,7 +293,7 @@
       save(data.nodes.filter((n) => n.id !== id));
       return;
     }
-    const into = folderAt(id, centre);
+    const into = folderAt([id], centre);
     if (into) {
       void moveNode(id, data.path, id, into.canvas);
       return;
@@ -245,7 +307,7 @@
    */
   function movedFromFolder(node: CanvasNode, from: NonNullable<CanvasNode["in"]>, x: number, y: number, centre: Point) {
     if (!data) return;
-    const into = folderAt(node.id, centre);
+    const into = folderAt([node.id], centre);
     if (into) {
       if (into.canvas !== from.canvas) void moveNode(node.id, from.canvas, from.id, into.canvas);
       return;
@@ -262,7 +324,7 @@
   async function moveNode(shown: string, from: string, id: string, into: string, at?: [number, number]) {
     if (!data) return;
     data = { ...data, nodes: data.nodes.filter((n) => n.id !== shown) };
-    selected = null;
+    selected = [];
     await app.run(() => app.api.putInFolder(from, id, into, at));
     app.version++;
   }
@@ -307,15 +369,6 @@
     glide(view, { x: left - pad / zoom, y: top - pad / zoom, zoom }, (next) => (view = next));
   }
 
-  /**
-   * A press selects (and shows the handle for drawing an arrow); a double press opens. A press on
-   * the background folds the unfolded folder.
-   */
-  function select(id: string | null) {
-    selected = id;
-    if (id === null) fold();
-  }
-
   /** A press on a folder of this canvas unfolds it, and folds it again. */
   function pressed(id: string) {
     const node = data?.nodes.find((n) => n.id === id);
@@ -325,7 +378,7 @@
   }
 
   function open(id: string) {
-    selected = id;
+    selected = [id];
     const node = data?.nodes.find((n) => n.id === id);
     // A sticky note in a folder is written on the folder's canvas.
     if (node?.type === "text" && !node.in) {
@@ -341,7 +394,11 @@
     else if (item.kind === "folder") app.open({ view: "project", project: folder, inside: item.path });
   }
 
-  const selectedNode = $derived(data?.nodes.find((n) => n.id === selected) ?? null);
+  /** The selected node when it is the only one, whose bar shows above the canvas. */
+  const selectedNode = $derived.by(() => {
+    if (selected.length !== 1) return null;
+    return data?.nodes.find((n) => n.id === selected[0]) ?? null;
+  });
 
   /** The sticky note being written in place. */
   let editing = $state<string | null>(null);
@@ -430,41 +487,36 @@
     return item.uri ?? null;
   }
 
+  /** Relates each node of `link.from` that can be related to `link.to`, and says how many couldn't. */
   async function connect(type: string) {
     const link = connecting;
     connecting = null;
     if (!link) return;
-    const from = uriOf(link.from);
     const to = uriOf(link.to);
-    if (!from || !to) {
+    const from = link.from.map(uriOf).filter((uri) => uri !== null);
+    if (!to || from.length === 0) {
       app.say("Only notes, files, links and issues can be connected.");
       return;
     }
-    await app.run(() => app.api.relate(from, to, type));
+    for (const uri of from) {
+      await app.run(() => app.api.relate(uri, to, type));
+    }
+    const skipped = link.from.length - from.length;
+    if (skipped === 1) app.say("1 node was left out: only notes, files, links and issues can be connected.");
+    if (skipped > 1) app.say(`${skipped} nodes were left out: only notes, files, links and issues can be connected.`);
   }
 
-  /** The relationships two nodes can have, and where each is kept. */
+  function cardOf(id: string): Card | null {
+    const item = data?.nodes.find((n) => n.id === id)?.item;
+    if (item?.kind === "issue") return item.card;
+    return null;
+  }
+
+  /** The relationships the nodes being connected can all have, leaving out those that can't have any. */
   const connectOptions = $derived.by(() => {
-    if (!connecting || !data) return [];
-    const cardOf = (id: string) => {
-      const item = data!.nodes.find((n) => n.id === id)?.item;
-      return item?.kind === "issue" ? item.card : null;
-    };
-    const [a, b] = [cardOf(connecting.from), cardOf(connecting.to)];
-    const relates = { type: "relates", label: "Relates to", where: "Kept in relations.jsonl" };
-    if (a && b && Boolean(a.local) === Boolean(b.local)) {
-      const where = a.local ? "Kept in the issue files" : "On GitHub";
-      return [
-        { type: "blocks", label: "Blocks", where },
-        { type: "parent-of", label: "Parent of, as a sub-issue", where },
-        relates,
-      ];
-    }
-    return [
-      { type: "blocks", label: "Blocks", where: "Kept in relations.jsonl" },
-      { type: "derived-from", label: "Derived from", where: "Kept in relations.jsonl" },
-      relates,
-    ];
+    if (!connecting) return [];
+    const from = connecting.from.filter((id) => uriOf(id) !== null);
+    return relationOptions(from.map(cardOf), cardOf(connecting.to));
   });
 
   function removeSelected(): boolean {
@@ -475,16 +527,13 @@
       if (arrow) void app.run(() => app.api.unrelate(arrow as Arrow));
       return true;
     }
-    if (selected) {
-      const node = data.nodes.find((n) => n.id === selected);
-      // An unfolded folder's node lives on the folder's canvas, and is removed there.
-      if (!node || node.item?.kind === "board" || node.in) return false;
-      selected = null;
-      app.select(null);
-      save(data.nodes.filter((n) => n.id !== node.id));
-      return true;
-    }
-    return false;
+    // The board stays, and an unfolded folder's nodes live on the folder's canvas, removed there.
+    const removed = data.nodes.filter((n) => selected.includes(n.id) && n.item?.kind !== "board" && !n.in);
+    if (removed.length === 0) return false;
+    selected = [];
+    app.select(null);
+    save(data.nodes.filter((n) => !removed.includes(n)));
+    return true;
   }
 
   $effect(() => {
@@ -514,7 +563,8 @@
       linkable
       {minSize}
       onresized={resizedNode}
-      onselect={select}
+      onselect={(ids) => (selected = ids)}
+      onbackground={fold}
       onopen={open}
       onselectarrow={(id) => (selectedArrow = id)}
       onmoved={moved}
@@ -535,7 +585,7 @@
               text={n.raw.text ?? ""}
               color={n.raw.color}
               {zoom}
-              selected={selected === n.id}
+              selected={selected.includes(n.id)}
               editing={editing === n.id}
               onchange={(text) => setText(n.id, text)}
               ondone={() => (editing = null)}
@@ -544,7 +594,7 @@
             <ItemNode
               item={n.raw.item}
               {zoom}
-              selected={selected === n.id}
+              selected={selected.includes(n.id)}
               width={n.w}
               height={n.h}
               open={unfolded === n.id}

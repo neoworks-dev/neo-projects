@@ -21,14 +21,24 @@
     y: number;
     zoom: number;
   }
+
+  /** Where a dragged node was let go. */
+  export interface Move {
+    id: string;
+    x: number;
+    y: number;
+  }
 </script>
 
 <script lang="ts" generics="N extends VNode, A extends VArrow">
   // An infinite canvas: nodes placed in world coordinates, drawn at the view's zoom, with arrows
-  // between them. Drag the background to pan, the wheel to pan, Ctrl+wheel to zoom. Drag a node to
-  // move it, or its sides and corners to resize it. Near a node, a dot slides out past the edge
-  // nearest the pointer; drag it onto another node to connect them. Files
-  // from other programs and in-app drags (a card from a board) can be dropped anywhere.
+  // between them. Drag the background to select the nodes in a box (Shift adds to the selection),
+  // drag it with the middle or right button or turn the wheel to pan, Ctrl+wheel to zoom. Press a
+  // node to select it, Shift+press to add or take it out. Drag a node to move it with the rest of
+  // the selection, or its sides and corners to resize it. Near a node, a dot slides out past the
+  // edge nearest the pointer; drag it onto another node to connect them, from every selected node
+  // when it is one of them. Files from other programs and in-app drags (a card from a board) can be
+  // dropped anywhere.
   import {
     DropTarget,
     Presence,
@@ -53,6 +63,8 @@
     near,
     nearestSide,
     resized,
+    spanned,
+    within,
     type Handle,
     type Point,
     type Rect,
@@ -64,7 +76,7 @@
     nodes: N[];
     arrows: A[];
     view: ViewState;
-    selected?: string | null;
+    selected?: string[];
     selectedArrow?: string | null;
     /** Draws a node's content, at `zoom`; it is laid out in a box of the node's size times zoom. */
     node: Snippet<[N, number]>;
@@ -75,16 +87,21 @@
     /** The smallest a node can be resized to, or null when it can't be resized. */
     minSize?: (node: N) => { w: number; h: number } | null;
     onresized?: (id: string, rect: Rect) => void;
-    onselect?: (id: string | null) => void;
+    /** The nodes to select now, after a press, a Shift+press or a box on the background. */
+    onselect?: (ids: string[]) => void;
+    /** A press on the background that didn't drag a box. */
+    onbackground?: () => void;
     /** A double press on a node. */
     onopen?: (id: string) => void;
-    /** A node pressed and released without moving it. */
+    /** A node pressed and released without moving it or holding Shift. */
     onpress?: (id: string) => void;
     onselectarrow?: (id: string | null) => void;
-    onmoved?: (id: string, x: number, y: number) => void;
-    /** A node being dragged is now at `x`, `y`; `onmoved` follows when it is let go. */
+    /** The dragged nodes were let go where `moves` says; `grabbed` is the one the pointer held. */
+    onmoved?: (moves: Move[], grabbed: string) => void;
+    /** The node held in a drag is now at `x`, `y`; `onmoved` follows when it is let go. */
     ondrag?: (id: string, x: number, y: number) => void;
-    onconnect?: (from: string, to: string) => void;
+    /** An arrow drawn from the nodes `from` onto the node `to`. */
+    onconnect?: (from: string[], to: string) => void;
     onfiles?: (paths: string[], at: Point) => void;
     /** Which in-app drags the canvas takes, and what to do with one dropped at a world point. */
     accept?: (data: unknown) => boolean;
@@ -95,7 +112,7 @@
     nodes,
     arrows,
     view = $bindable(),
-    selected = null,
+    selected = [],
     selectedArrow = null,
     node,
     movable = () => true,
@@ -103,6 +120,7 @@
     minSize = () => null,
     onresized,
     onselect,
+    onbackground,
     onopen,
     onpress,
     onselectarrow,
@@ -115,13 +133,29 @@
   }: Props = $props();
 
   let box = $state<Layout>({ x: 0, y: 0, width: 0, height: 0 });
-  /** The node being dragged and where it is now (world), until it is dropped. */
-  let drag = $state<{ id: string; x: number; y: number; start: Point; from: Point; moved: boolean } | null>(null);
+  /**
+   * The nodes being dragged, until they are dropped: the one held, where each started (world),
+   * and how far they have come.
+   */
+  let drag = $state<{
+    id: string;
+    starts: Map<string, Point>;
+    dx: number;
+    dy: number;
+    from: Point;
+    moved: boolean;
+    shift: boolean;
+  } | null>(null);
   /** The background being dragged: where the view and the pointer were when it started. */
   let pan: { view: ViewState; from: Point } | null = null;
   let panning = $state(false);
-  /** An arrow being drawn: from which node, to where the pointer is (viewport coordinates). */
-  let link = $state<{ from: string; to: Point } | null>(null);
+  /**
+   * A selection box being dragged on the background, from `from` to `to` (viewport coordinates),
+   * and what was selected before it, which Shift keeps.
+   */
+  let lasso = $state<{ from: Point; to: Point; kept: string[] } | null>(null);
+  /** An arrow being drawn: from which nodes, to where the pointer is (viewport coordinates). */
+  let link = $state<{ from: string[]; to: Point } | null>(null);
   let pointer: Point | null = null;
 
   /** How close the pointer comes to a node, in screen pixels, before its arrow dot shows. */
@@ -160,7 +194,8 @@
   let resize = $state<{ id: string; handle: Handle; start: Rect; from: Point; rect: Rect } | null>(null);
 
   function placed(n: N): N {
-    if (drag && drag.id === n.id) return { ...n, x: drag.x, y: drag.y };
+    const start = drag?.starts.get(n.id);
+    if (drag && start) return { ...n, x: start.x + drag.dx, y: start.y + drag.dy };
     if (resize && resize.id === n.id) return { ...n, ...resize.rect };
     return n;
   }
@@ -214,16 +249,21 @@
     return out;
   });
 
-  /** The arrow being drawn, in layer coordinates. */
-  const linkLine = $derived.by(() => {
-    if (!link) return null;
-    const from = byId.get(link.from);
-    if (!from) return null;
+  /** The arrows being drawn, one from each node they start at, in layer coordinates. */
+  const linkLines = $derived.by(() => {
+    if (!link) return [];
     const at = toWorld(link.to);
-    const world = arrowPath(from, { x: at.x, y: at.y, w: 0, h: 0 });
-    if (!world) return null;
-    return world.map((p) => ({ x: p.x * zoom, y: p.y * zoom }));
+    return link.from.flatMap((id) => {
+      const from = byId.get(id);
+      if (!from) return [];
+      const world = arrowPath(from, { x: at.x, y: at.y, w: 0, h: 0 });
+      if (!world) return [];
+      return [{ id, points: world.map((p) => ({ x: p.x * zoom, y: p.y * zoom })) }];
+    });
   });
+
+  /** The selection box, in viewport coordinates. */
+  const lassoBox = $derived(lasso ? spanned(lasso.from, lasso.to) : null);
 
   // Pointer moves come faster than frames (a 1000 Hz mouse sends sixteen a frame); only the last
   // one before each frame is applied.
@@ -252,15 +292,38 @@
   }
 
   function backgroundDown(e: PointerEvent) {
+    onselectarrow?.(null);
+    if (e.button === 0) {
+      lasso = { from: local(e), to: local(e), kept: e.shift ? selected : [] };
+      if (!e.shift) onselect?.([]);
+      return;
+    }
     pan = { view: { ...view }, from: { x: e.windowX, y: e.windowY } };
     panning = true;
-    onselect?.(null);
-    onselectarrow?.(null);
+  }
+
+  /** Selects what was kept and every node wholly inside the box. */
+  function lassoSelect() {
+    if (!lassoBox) return;
+    const corner = toWorld(lassoBox);
+    const area = { ...corner, w: lassoBox.w / zoom, h: lassoBox.h / zoom };
+    const kept = lasso?.kept ?? [];
+    const inside = shown.filter((n) => within(n, area) && !kept.includes(n.id)).map((n) => n.id);
+    onselect?.([...kept, ...inside]);
   }
 
   function backgroundMove(e: PointerEvent) {
     pointer = local(e);
     track(e);
+    if (lasso) {
+      const to = local(e);
+      later(() => {
+        if (!lasso) return;
+        lasso = { ...lasso, to };
+        lassoSelect();
+      });
+      return;
+    }
     const start = pan;
     if (!start) return;
     const { windowX, windowY } = e;
@@ -277,6 +340,8 @@
     flush();
     pan = null;
     panning = false;
+    if (lasso && lassoBox && lassoBox.w + lassoBox.h <= 3) onbackground?.();
+    lasso = null;
   }
 
   function wheel(e: WheelEvent) {
@@ -299,10 +364,26 @@
       onopen?.(n.id);
       return;
     }
-    onselect?.(n.id);
     onselectarrow?.(null);
+    let group = [n.id];
+    if (e.shift && selected.includes(n.id)) {
+      onselect?.(selected.filter((id) => id !== n.id));
+      return;
+    }
+    if (e.shift) {
+      group = [...selected, n.id];
+      onselect?.(group);
+    } else if (selected.includes(n.id)) {
+      group = selected;
+    } else {
+      onselect?.(group);
+    }
     if (!movable(n)) return;
-    drag = { id: n.id, x: n.x, y: n.y, start: { x: n.x, y: n.y }, from: { x: e.windowX, y: e.windowY }, moved: false };
+    const starts = new Map<string, Point>();
+    for (const m of shown) {
+      if (group.includes(m.id) && movable(m)) starts.set(m.id, { x: m.x, y: m.y });
+    }
+    drag = { id: n.id, starts, dx: 0, dy: 0, from: { x: e.windowX, y: e.windowY }, moved: false, shift: e.shift };
   }
 
   function nodeMove(e: PointerEvent) {
@@ -314,16 +395,26 @@
       const dx = (windowX - drag.from.x) / zoom;
       const dy = (windowY - drag.from.y) / zoom;
       const moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 3 / zoom;
-      drag = { ...drag, x: Math.round(drag.start.x + dx), y: Math.round(drag.start.y + dy), moved };
-      if (moved) ondrag?.(drag.id, drag.x, drag.y);
+      drag = { ...drag, dx: Math.round(dx), dy: Math.round(dy), moved };
+      const start = drag.starts.get(drag.id);
+      if (moved && start) ondrag?.(drag.id, start.x + drag.dx, start.y + drag.dy);
     });
   }
 
   function nodeUp() {
     flush();
-    if (drag?.moved) onmoved?.(drag.id, drag.x, drag.y);
-    else if (drag) onpress?.(drag.id);
+    const done = drag;
     drag = null;
+    if (!done) return;
+    if (done.moved) {
+      const moves = [...done.starts].map(([id, start]) => ({ id, x: start.x + done.dx, y: start.y + done.dy }));
+      onmoved?.(moves, done.id);
+      return;
+    }
+    // Shift+press only adds to the selection; a plain press on one of several selects just it.
+    if (done.shift) return;
+    if (done.starts.size > 1) onselect?.([done.id]);
+    onpress?.(done.id);
   }
 
   function resizeDown(n: N, handle: Handle, e: PointerEvent) {
@@ -354,7 +445,8 @@
   }
 
   function linkDown(n: N, e: PointerEvent) {
-    link = { from: n.id, to: local(e) };
+    if (selected.includes(n.id)) link = { from: selected, to: local(e) };
+    else link = { from: [n.id], to: local(e) };
   }
 
   function linkMove(e: PointerEvent) {
@@ -368,7 +460,8 @@
     flush();
     if (!link) return;
     const at = toWorld(link.to);
-    const target = [...shown].reverse().find((n) => n.id !== link?.from && contains(n, at));
+    const from = link.from;
+    const target = [...shown].reverse().find((n) => !from.includes(n.id) && contains(n, at));
     if (target) onconnect?.(link.from, target.id);
     link = null;
   }
@@ -404,9 +497,9 @@
       {@const chosen = arrow.id === selectedArrow}
       <Ink {points} color={chosen ? c.accent : (arrow.color ?? c.borderStrong)} width={chosen ? 2.5 : 1.75} />
     {/each}
-    {#if linkLine}
-      <Ink points={linkLine} color={c.accent} width={2} head={false} />
-    {/if}
+    {#each linkLines as line (line.id)}
+      <Ink points={line.points} color={c.accent} width={2} head={false} />
+    {/each}
     {#each lines as { arrow, mid } (arrow.id)}
       {@const chosen = arrow.id === selectedArrow}
       <View
@@ -504,4 +597,18 @@
       {/if}
     {/each}
   </View>
+  {#if lassoBox}
+    <View
+      style={{
+        position: "absolute",
+        left: lassoBox.x,
+        top: lassoBox.y,
+        width: lassoBox.w,
+        height: lassoBox.h,
+        background: c.accentSoft,
+        borderWidth: 1,
+        borderColor: c.accent,
+      }}
+    />
+  {/if}
 </View>
